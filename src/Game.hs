@@ -8,6 +8,7 @@ import Engine.Drawing
 import Engine.Utils
 import Data.Foldable
 import Data.List
+import Control.Monad.Except
 
 
 handleClose :: SF RawFrameInfo (Event BattleMenu)
@@ -24,8 +25,12 @@ handleClose = proc rfi -> do
     ]
 
 
-selectParticipant :: BattleState -> (BattleParticipant -> Bool) -> BattleMenu -> Swont RawFrameInfo Renderable (Either BattleMenu BattleParticipant)
-selectParticipant bs pred me = swont $ loopPre 0 $ proc (rfi, ix) -> do
+selectParticipant
+  :: BattleState
+  -> (BattleParticipant -> Bool)
+  -> BattleMenu
+  -> ExceptT BattleMenu (Swont RawFrameInfo Renderable) BattleParticipant
+selectParticipant bs pred me = ExceptT $ swont $ loopPre 0 $ proc (rfi, ix) -> do
   let sel_part = parts !! ix
 
   close <- handleClose -< rfi
@@ -43,14 +48,18 @@ selectParticipant bs pred me = swont $ loopPre 0 $ proc (rfi, ix) -> do
         , Endo (+ 1)        <$ right
         ]
 
-
-  returnA -< ((drawFilledRect (V4 255 0 255 255) $ Rectangle (P $ bp_pos sel_part - 10) 10, asum [ev, fmap Left close] ), clamp 0 (len - 1) $ fromEvent id update_ix ix)
+  returnA -< ( ( drawFilledRect (V4 255 0 255 255) $ Rectangle (P $ bp_pos sel_part - 10) 10
+               , asum [ev, fmap Left close]
+               )
+             , clamp 0 (len - 1) $ fromEvent id update_ix ix
+             )
  where
   parts = sortOn (view _x . bp_pos) $ filter pred $ bs_participants bs
   len = length $ parts
 
-menu :: Display a => [a] -> BattleMenu -> Swont RawFrameInfo Renderable (Either BattleMenu a)
-menu opts me = swont $ loopPre 0 $ proc (rfi, ix) -> do
+
+menu :: Display a => [a] -> BattleMenu -> ExceptT BattleMenu (Swont RawFrameInfo Renderable) a
+menu opts me = ExceptT $ swont $ loopPre 0 $ proc (rfi, ix) -> do
   close <- handleClose -< rfi
   let ev = do
         e <- close
@@ -136,22 +145,16 @@ state = BattleState [mario, mallow]
 
 battleMenu :: Maybe BattleMenu -> Swont RawFrameInfo Renderable BattleAction
 battleMenu m = do
-  e <- case m of
-    Nothing -> swont $ fmap ((mempty, ) . fmap Left) handleClose
+  e <- runExceptT $ case m of
+    Nothing -> ExceptT $ swont $ fmap ((mempty, ) . fmap Left) handleClose
     Just AttackMenu -> menu [Attack] AttackMenu
     Just DefendMenu -> menu [Defend, RunAway] DefendMenu
     Just ItemMenu   -> do
-      mitem <- menu [minBound @Item .. maxBound] ItemMenu
-      case mitem of
-        Left  bm -> pure $ Left bm
-        Right item -> do
-          selectParticipant state (const True) ItemMenu >>= \case
-            Left  m' -> pure $ Left m'
-            Right who -> pure $ Right $ UseItem item who
-    Just SpellMenu  -> fmap (fmap UseSpell) $ menu [minBound .. maxBound] SpellMenu
-  case e of
-    Right a -> pure a
-    Left m' -> battleMenu $ Just m'
+      item <- menu [minBound @Item .. maxBound] ItemMenu
+      who <- selectParticipant state (const True) ItemMenu
+      pure $ UseItem item who
+    Just SpellMenu  -> fmap UseSpell $ menu [minBound .. maxBound] SpellMenu
+  either (battleMenu . Just) pure e
 
 renderBattle :: SF RawFrameInfo Renderable
 renderBattle = proc rfi -> do
