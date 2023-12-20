@@ -194,7 +194,8 @@ data TimedHitResult = Unattempted | Flubbed | Good | Perfect
 timedHit :: BattleMenu -> SF (RawFrameInfo, Event a) (Event TimedHitResult)
 timedHit bm = loopPre (-9999, noEvent, noEvent) $ proc ((rfi, raw_ev), (last_attempt, last_ok, seen)) -> do
   let cooldown = 0.3
-      grace    = 0.15
+      grace    = 0.12
+      flub     = 0.2
       perfect  = 0.05
   now <- time -< ()
   let ev = now <$ raw_ev
@@ -206,13 +207,13 @@ timedHit bm = loopPre (-9999, noEvent, noEvent) $ proc ((rfi, raw_ev), (last_att
           True  -> attempt_ev
           False -> noEvent
   returnA
-    -< ( case traceShowId (seen, last_ok) of
+    -< ( case (seen, last_ok) of
            (Event real, Event hit)
              | abs (real - hit) <= perfect -> Event Perfect
              | abs (real - hit) <= grace   -> Event Good
              | otherwise                   -> Event Flubbed
            (Event real, _)
-             | now >= real + grace         -> Event Unattempted
+             | now >= real + flub          -> Event Unattempted
            (_, _)                          -> noEvent
        , (fromEvent last_attempt attempt_ev, ok_ev <|> last_ok, ev <|> seen))
 
