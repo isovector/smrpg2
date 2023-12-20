@@ -48,11 +48,15 @@ selectParticipant bs pred me = ExceptT $ swont $ loopPre 0 $ proc (rfi, ix) -> d
         , Endo (+ 1)        <$ right
         ]
 
-  returnA -< ( ( drawFilledRect (V4 255 0 255 255) $ Rectangle (P $ bp_pos sel_part - 10) 10
-               , asum [ev, fmap Left close]
-               )
-             , clamp 0 (len - 1) $ fromEvent id update_ix ix
-             )
+  returnA -<
+    ( ( mconcat
+          [ drawFilledRect (V4 255 0 255 255) $ Rectangle (P $ bp_pos sel_part - 10) 10
+          , drawText 12 (V3 0 0 0) (display $ bp_name sel_part) $ bp_pos sel_part + V2 0 30
+          ]
+      , asum [ev, fmap Left close]
+      )
+    , clamp 0 (len - 1) $ fromEvent id update_ix ix
+    )
  where
   parts = sortOn (view _x . bp_pos) $ filter pred $ bs_participants bs
   len = length $ parts
@@ -111,8 +115,26 @@ instance Display Spell where
 data Spell = Spell_TestSpell
   deriving (Eq, Ord, Show, Enum, Bounded)
 
-data BattleAction = Attack | Defend | RunAway | UseItem Item BattleParticipant | UseSpell Spell
+data BattleAction
+  = Attack
+  | Defend
+  | RunAway
+  | UseItem Item
+  | UseSpell Spell
   deriving (Eq, Ord, Show)
+
+needsSelection :: BattleAction -> ParticipantSelection
+needsSelection Attack = SelectEnemy
+needsSelection Defend = NoSelection
+needsSelection RunAway = NoSelection
+needsSelection (UseItem Item_TestItem) = SelectHero
+needsSelection (UseSpell Spell_TestSpell) = SelectEnemy
+
+toPredicate :: ParticipantSelection -> BattleParticipant -> Bool
+toPredicate SelectEnemy = (== EnemyTeam) . bp_team
+toPredicate SelectHero = (== HeroTeam) . bp_team
+toPredicate SelectAnyone = const True
+toPredicate NoSelection = const False
 
 instance Display BattleAction where
   display = show
@@ -121,7 +143,8 @@ instance Display BattleMenu where
   display = show
 
 data BattleParticipant = BattleParticipant
-  { bp_hp    :: Int
+  { bp_name  :: String
+  , bp_hp    :: Int
   , bp_team  :: Team
   , bp_color :: Color
   , bp_pos   :: V2 Double
@@ -134,27 +157,45 @@ data BattleState = BattleState
   deriving (Eq, Ord, Show)
 
 
-mario :: BattleParticipant
-mario = BattleParticipant 100 HeroTeam (V4 255 0 0 255) 300
+horton :: BattleParticipant
+horton = BattleParticipant "Horton" 100 HeroTeam (V4 255 0 0 255) 300
 
-mallow :: BattleParticipant
-mallow = BattleParticipant 100 HeroTeam (V4 255 255 255 255) 400
+
+skalp :: BattleParticipant
+skalp = BattleParticipant "Skalp" 100 HeroTeam (V4 255 255 255 255) 400
+
+
+baddie :: BattleParticipant
+baddie = BattleParticipant "Baddie" 100 EnemyTeam (V4 0 0 0 255) $ V2 400 200
+
 
 state :: BattleState
-state = BattleState [mario, mallow]
+state = BattleState [horton, skalp, baddie]
 
-battleMenu :: Maybe BattleMenu -> Swont RawFrameInfo Renderable BattleAction
+data ParticipantSelection
+  = SelectHero
+  | SelectEnemy
+  | SelectAnyone
+  | NoSelection
+  deriving (Eq, Ord, Show, Enum, Bounded)
+
+
+
+battleMenu :: Maybe BattleMenu -> Swont RawFrameInfo Renderable (BattleAction, Maybe BattleParticipant)
 battleMenu m = do
-  e <- runExceptT $ case m of
-    Nothing -> ExceptT $ swont $ fmap ((mempty, ) . fmap Left) handleClose
-    Just AttackMenu -> menu [Attack] AttackMenu
-    Just DefendMenu -> menu [Defend, RunAway] DefendMenu
-    Just ItemMenu   -> do
-      item <- menu [minBound @Item .. maxBound] ItemMenu
-      who <- selectParticipant state (const True) ItemMenu
-      pure $ UseItem item who
-    Just SpellMenu  -> fmap UseSpell $ menu [minBound .. maxBound] SpellMenu
-  either (battleMenu . Just) pure e
+  result <- runExceptT $ do
+    (mode, action) <- case m of
+      Nothing -> ExceptT $ swont $ fmap ((mempty, ) . fmap Left) handleClose
+      Just AttackMenu -> fmap (AttackMenu, ) $ menu [Attack] AttackMenu
+      Just DefendMenu -> fmap (DefendMenu, ) $ menu [Defend, RunAway] DefendMenu
+      Just ItemMenu   -> fmap ((ItemMenu, ) . UseItem)   $ menu [minBound @Item .. maxBound] ItemMenu
+      Just SpellMenu  -> fmap ((SpellMenu, ) . UseSpell) $ menu [minBound @Spell .. maxBound] SpellMenu
+    who <- case needsSelection action of
+      NoSelection -> pure Nothing
+      sel         -> fmap Just $ selectParticipant state (toPredicate sel) mode
+    pure (action, who)
+  either (battleMenu . Just) pure result
+
 
 renderBattle :: SF RawFrameInfo Renderable
 renderBattle = proc rfi -> do
@@ -163,21 +204,9 @@ renderBattle = proc rfi -> do
     pure $ drawFilledRect (bp_color p) $ Rectangle (P $ bp_pos p) 20
 
 
-
-
 game :: SF RawFrameInfo Renderable
 game = proc rfi -> do
   battle <- renderBattle -< rfi
   menus <- runSwont (error . show) $ battleMenu Nothing -< rfi
   returnA -< battle <> menus
-
-
-
---   proc (rfi, which) -> do
---   (att, _) <- pause mempty _ $ menu ["attack"] (arr $ c_ok . fi_controls) -< rfi
---   (def, _) <- pause mempty _ $ menu ["defend", "run away"] (arr $ c_cancel . fi_controls) -< rfi
---   returnA -< (, which) $ mconcat
---     [ att
---     , def
---     ]
 
