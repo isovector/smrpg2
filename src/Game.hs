@@ -192,7 +192,7 @@ data TimedHitResult = Unattempted | Flubbed | Good | Perfect
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 timedHit :: BattleMenu -> SF (RawFrameInfo, Event a) (Event TimedHitResult)
-timedHit bm = loopPre (0, noEvent, noEvent) $ proc ((rfi, raw_ev), (last_attempt, last_ok, seen)) -> do
+timedHit bm = loopPre (-9999, noEvent, noEvent) $ proc ((rfi, raw_ev), (last_attempt, last_ok, seen)) -> do
   let cooldown = 0.3
       grace    = 0.15
       perfect  = 0.05
