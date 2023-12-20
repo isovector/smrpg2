@@ -1,6 +1,7 @@
 
 module Game where
 
+import Control.Applicative
 import Control.Monad
 import Data.Monoid
 import Engine.Types
@@ -11,12 +12,19 @@ import Data.List
 import Control.Monad.Except
 
 
+menuButton :: BattleMenu -> Controls -> Bool
+menuButton AttackMenu = c_ok
+menuButton DefendMenu = c_cancel
+menuButton ItemMenu   = c_item
+menuButton SpellMenu  = c_spell
+
+
 handleClose :: SF RawFrameInfo (Event BattleMenu)
 handleClose = proc rfi -> do
-  att <- edge -< c_ok     $ fi_controls rfi
-  def <- edge -< c_cancel $ fi_controls rfi
-  item <- edge -< c_item $ fi_controls rfi
-  spell <- edge -< c_spell $ fi_controls rfi
+  att   <- edge -< menuButton AttackMenu $ fi_controls rfi
+  def   <- edge -< menuButton DefendMenu $ fi_controls rfi
+  item  <- edge -< menuButton ItemMenu   $ fi_controls rfi
+  spell <- edge -< menuButton SpellMenu  $ fi_controls rfi
   returnA -< asum
     [ AttackMenu <$ att
     , DefendMenu <$ def
@@ -70,7 +78,7 @@ menu opts me = ExceptT $ swont $ loopPre 0 $ proc (rfi, ix) -> do
         guard $ me == e
         pure $ Right $ opts !! ix
 
-  up    <- edge -< c_up $ fi_controls rfi
+  up    <- edge -< c_up   $ fi_controls rfi
   down  <- edge -< c_down $ fi_controls rfi
 
   let update_ix :: Event (Int -> Int)
@@ -180,6 +188,54 @@ data ParticipantSelection
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 
+data TimedHitResult = Unattempted | Flubbed | Good | Perfect
+  deriving (Eq, Ord, Show, Enum, Bounded)
+
+timedHit :: BattleMenu -> SF (RawFrameInfo, Event a) (Event TimedHitResult)
+timedHit bm = loopPre (0, noEvent, noEvent) $ proc ((rfi, raw_ev), (last_attempt, last_ok, seen)) -> do
+  let cooldown = 0.3
+      grace    = 0.15
+      perfect  = 0.05
+  now <- time -< ()
+  let ev = now <$ raw_ev
+  attempt_press <- edge -< menuButton bm $ fi_controls rfi
+  let is_attempt = isEvent attempt_press
+  let attempt_ev = now <$ attempt_press
+  let ok_ev =
+        case is_attempt && now - last_attempt >= cooldown of
+          True  -> attempt_ev
+          False -> noEvent
+  returnA
+    -< ( case traceShowId (seen, last_ok) of
+           (Event real, Event hit)
+             | abs (real - hit) <= perfect -> Event Perfect
+             | abs (real - hit) <= grace   -> Event Good
+             | otherwise                   -> Event Flubbed
+           (Event real, _)
+             | now >= real + grace         -> Event Unattempted
+           (_, _)                          -> noEvent
+       , (fromEvent last_attempt attempt_ev, ok_ev <|> last_ok, ev <|> seen))
+
+
+testTimedHits :: SF RawFrameInfo Renderable
+testTimedHits = runSwont undefined $ fix $ \loop -> do
+  timed 2 $ proc rfi -> do
+    ev <- after 1 () -< ()
+    thr' <- timedHit DefendMenu -< (rfi, ev)
+    thr <- once -< thr'
+    res <- hold Nothing -< fmap Just thr
+    returnA -<
+      case (ev, res) of
+        (Event _, _) -> drawBackgroundColor $ V4 0 0 0 255
+        (_, Nothing) -> mempty
+        (_, Just Perfect) -> drawBackgroundColor $ V4 0 255 0 255
+        (_, Just Good) -> drawBackgroundColor $ V4 255 255 0 255
+        (_, Just Flubbed) -> drawBackgroundColor $ V4 255 0 0 255
+        (_, Just Unattempted) -> drawBackgroundColor $ V4 255 0 255 255
+  loop
+
+
+
 
 battleMenu :: Maybe BattleMenu -> Swont RawFrameInfo Renderable (BattleAction, Maybe BattleParticipant)
 battleMenu m = do
@@ -188,7 +244,7 @@ battleMenu m = do
       Nothing -> ExceptT $ swont $ fmap ((mempty, ) . fmap Left) handleClose
       Just AttackMenu -> fmap (AttackMenu, ) $ menu [Attack] AttackMenu
       Just DefendMenu -> fmap (DefendMenu, ) $ menu [Defend, RunAway] DefendMenu
-      Just ItemMenu   -> fmap ((ItemMenu, ) . UseItem)   $ menu [minBound @Item .. maxBound] ItemMenu
+      Just ItemMenu   -> fmap ((ItemMenu, )  . UseItem)  $ menu [minBound @Item  .. maxBound] ItemMenu
       Just SpellMenu  -> fmap ((SpellMenu, ) . UseSpell) $ menu [minBound @Spell .. maxBound] SpellMenu
     who <- case needsSelection action of
       NoSelection -> pure Nothing
@@ -205,8 +261,10 @@ renderBattle = proc rfi -> do
 
 
 game :: SF RawFrameInfo Renderable
-game = proc rfi -> do
-  battle <- renderBattle -< rfi
-  menus <- runSwont (error . show) $ battleMenu Nothing -< rfi
-  returnA -< battle <> menus
+game = testTimedHits
+
+--   proc rfi -> do
+--   battle <- renderBattle -< rfi
+--   menus <- runSwont (error . show) $ battleMenu Nothing -< rfi
+--   returnA -< battle <> menus
 
