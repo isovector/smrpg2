@@ -92,7 +92,6 @@ default-extensions:
 
 ghc-options:
 - -Wall
-- -Wcompat
 - -Widentities
 - -Wincomplete-record-updates
 - -Wincomplete-uni-patterns

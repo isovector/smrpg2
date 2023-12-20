@@ -1,15 +1,17 @@
+{-# LANGUAGE GADTs #-}
 
 module Game where
 
 import Control.Applicative
 import Control.Monad
-import Data.Monoid
-import Engine.Types
-import Engine.Drawing
-import Engine.Utils
+import Control.Monad.Except
 import Data.Foldable
 import Data.List
-import Control.Monad.Except
+import Data.Monoid
+import Engine.Drawing
+import Engine.Router
+import Engine.Types
+import Engine.Utils
 
 
 menuButton :: BattleMenu -> Controls -> Bool
@@ -33,12 +35,12 @@ handleClose = proc rfi -> do
     ]
 
 
-selectParticipant
+selectFighter
   :: BattleState
-  -> (BattleParticipant -> Bool)
+  -> (BattleFighter -> Bool)
   -> BattleMenu
-  -> ExceptT BattleMenu (Swont RawFrameInfo Renderable) BattleParticipant
-selectParticipant bs pred me = ExceptT $ swont $ loopPre 0 $ proc (rfi, ix) -> do
+  -> ExceptT BattleMenu (Swont RawFrameInfo Renderable) BattleFighter
+selectFighter bs p me = ExceptT $ swont $ loopPre 0 $ proc (rfi, ix) -> do
   let sel_part = parts !! ix
 
   close <- handleClose -< rfi
@@ -66,7 +68,7 @@ selectParticipant bs pred me = ExceptT $ swont $ loopPre 0 $ proc (rfi, ix) -> d
     , clamp 0 (len - 1) $ fromEvent id update_ix ix
     )
  where
-  parts = sortOn (view _x . bp_pos) $ filter pred $ bs_participants bs
+  parts = sortOn (view _x . bp_pos) $ filter p $ bs_participants bs
   len = length $ parts
 
 
@@ -131,14 +133,14 @@ data BattleAction
   | UseSpell Spell
   deriving (Eq, Ord, Show)
 
-needsSelection :: BattleAction -> ParticipantSelection
+needsSelection :: BattleAction -> FighterSelection
 needsSelection Attack = SelectEnemy
 needsSelection Defend = NoSelection
 needsSelection RunAway = NoSelection
 needsSelection (UseItem Item_TestItem) = SelectHero
 needsSelection (UseSpell Spell_TestSpell) = SelectEnemy
 
-toPredicate :: ParticipantSelection -> BattleParticipant -> Bool
+toPredicate :: FighterSelection -> BattleFighter -> Bool
 toPredicate SelectEnemy = (== EnemyTeam) . bp_team
 toPredicate SelectHero = (== HeroTeam) . bp_team
 toPredicate SelectAnyone = const True
@@ -150,7 +152,7 @@ instance Display BattleAction where
 instance Display BattleMenu where
   display = show
 
-data BattleParticipant = BattleParticipant
+data BattleFighter = BattleFighter
   { bp_name  :: String
   , bp_hp    :: Int
   , bp_team  :: Team
@@ -160,27 +162,27 @@ data BattleParticipant = BattleParticipant
   deriving (Eq, Ord, Show)
 
 data BattleState = BattleState
-  { bs_participants :: [BattleParticipant]
+  { bs_participants :: [BattleFighter]
   }
   deriving (Eq, Ord, Show)
 
 
-horton :: BattleParticipant
-horton = BattleParticipant "Horton" 100 HeroTeam (V4 255 0 0 255) 300
+horton :: BattleFighter
+horton = BattleFighter "Horton" 100 HeroTeam (V4 255 0 0 255) 300
 
 
-skalp :: BattleParticipant
-skalp = BattleParticipant "Skalp" 100 HeroTeam (V4 255 255 255 255) 400
+skalp :: BattleFighter
+skalp = BattleFighter "Skalp" 100 HeroTeam (V4 255 255 255 255) 400
 
 
-baddie :: BattleParticipant
-baddie = BattleParticipant "Baddie" 100 EnemyTeam (V4 0 0 0 255) $ V2 400 200
+baddie :: BattleFighter
+baddie = BattleFighter "Baddie" 100 EnemyTeam (V4 0 0 0 255) $ V2 400 200
 
 
 state :: BattleState
 state = BattleState [horton, skalp, baddie]
 
-data ParticipantSelection
+data FighterSelection
   = SelectHero
   | SelectEnemy
   | SelectAnyone
@@ -197,13 +199,13 @@ timedHit bm = loopPre (-9999, noEvent, noEvent) $ proc ((rfi, raw_ev), (last_att
       grace    = 0.12
       flub     = 0.2
       perfect  = 0.05
-  now <- time -< ()
-  let ev = now <$ raw_ev
+  t <- time -< ()
+  let ev = t <$ raw_ev
   attempt_press <- edge -< menuButton bm $ fi_controls rfi
   let is_attempt = isEvent attempt_press
-  let attempt_ev = now <$ attempt_press
+  let attempt_ev = t <$ attempt_press
   let ok_ev =
-        case is_attempt && now - last_attempt >= cooldown of
+        case is_attempt && t - last_attempt >= cooldown of
           True  -> attempt_ev
           False -> noEvent
   returnA
@@ -213,7 +215,7 @@ timedHit bm = loopPre (-9999, noEvent, noEvent) $ proc ((rfi, raw_ev), (last_att
              | abs (real - hit) <= grace   -> Event Good
              | otherwise                   -> Event Flubbed
            (Event real, _)
-             | now >= real + flub          -> Event Unattempted
+             | t >= real + flub          -> Event Unattempted
            (_, _)                          -> noEvent
        , (fromEvent last_attempt attempt_ev, ok_ev <|> last_ok, ev <|> seen))
 
@@ -238,7 +240,7 @@ testTimedHits = runSwont undefined $ fix $ \loop -> do
 
 
 
-battleMenu :: Maybe BattleMenu -> Swont RawFrameInfo Renderable (BattleAction, Maybe BattleParticipant)
+battleMenu :: Maybe BattleMenu -> Swont RawFrameInfo Renderable (BattleAction, Maybe BattleFighter)
 battleMenu m = do
   result <- runExceptT $ do
     (mode, action) <- case m of
@@ -249,7 +251,7 @@ battleMenu m = do
       Just SpellMenu  -> fmap ((SpellMenu, ) . UseSpell) $ menu [minBound @Spell .. maxBound] SpellMenu
     who <- case needsSelection action of
       NoSelection -> pure Nothing
-      sel         -> fmap Just $ selectParticipant state (toPredicate sel) mode
+      sel         -> fmap Just $ selectFighter state (toPredicate sel) mode
     pure (action, who)
   either (battleMenu . Just) pure result
 
@@ -262,10 +264,24 @@ renderBattle = proc rfi -> do
 
 
 game :: SF RawFrameInfo Renderable
-game = testTimedHits
+game = proc rfi -> do
+  battle <- renderBattle -< rfi
+  menus <- runSwont (error . show) $ battleMenu Nothing -< rfi
+  returnA -< battle <> menus
 
---   proc rfi -> do
---   battle <- renderBattle -< rfi
---   menus <- runSwont (error . show) $ battleMenu Nothing -< rfi
---   returnA -< battle <> menus
+data HeroKey
+  = Hero1
+  | Hero2
+  | Hero3
+  | Hero4
+  deriving (Eq, Ord, Show, Enum, Bounded)
+
+data FighterId
+  = HeroKey HeroKey
+  deriving (Eq, Ord, Show)
+
+data Test a where
+  Test :: Test Int
+
+deriving instance Eq (Test a)
 

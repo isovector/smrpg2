@@ -33,26 +33,111 @@ import           Data.Bool (bool)
 import           Data.Coerce
 import           Data.Foldable (toList)
 import           Data.Generics.Labels ()
+import           Data.Kind
+import           Data.Map.Strict (Map)
+import           Data.Typeable
 import           Data.Word
 import           Debug.Trace (trace, traceShowId, traceM)
+import           Engine.FRP hiding (left, right, loop)
 import           Foreign.C (CInt)
-import           Engine.FRP
 import           GHC.Generics
 import           SDL hiding (trace, Event, Display)
 -- import qualified Sound.ALUT as ALUT
 
 data Controls = Controls
-  { c_up    :: Bool
-  , c_down  :: Bool
-  , c_left  :: Bool
-  , c_right :: Bool
-  , c_dir   :: V2 Int
-  , c_ok      :: Bool
-  , c_cancel  :: Bool
-  , c_spell :: Bool
-  , c_item :: Bool
+  { c_up     :: Bool
+  , c_down   :: Bool
+  , c_left   :: Bool
+  , c_right  :: Bool
+  , c_dir    :: V2 Int
+  , c_ok     :: Bool
+  , c_cancel :: Bool
+  , c_spell  :: Bool
+  , c_item   :: Bool
   }
   deriving (Eq, Ord, Show, Read)
+
+
+type SomeMsg :: (Type -> Type) -> Type
+data SomeMsg msg where
+  SomeMsg :: Typeable t => msg t -> t -> SomeMsg msg
+
+instance Eq (SomeMsg msg) where
+  _ == _ = False
+
+
+
+
+type ObjectMap :: (Type -> Type) -> Type -> Type -> Type
+data ObjectMap msg k a = ObjectMap
+  { objm_undeliveredMsgs :: Map k [(k, SomeMsg msg)]
+  , objm_map :: Map k a
+  }
+  deriving stock (Functor, Generic, Foldable)
+
+data Message a where
+  deriving stock (Eq, Ord, Show, Read, Generic)
+
+type ObjSF msg k = SF (ObjectInput msg k) (ObjectOutput msg k)
+
+type ObjectEvents :: (Type -> Type) -> Type -> Type
+data ObjectEvents msg k = ObjectEvents
+  { oe_die               :: Event ()
+  , oe_spawn             :: Event [(Maybe k, ObjSF msg k)]
+  , oe_send_message      :: Event [(k, SomeMsg msg)]
+  , oe_broadcast_message :: Event [SomeMsg msg]
+  }
+  deriving stock (Generic)
+
+instance Semigroup (ObjectEvents msg k) where
+  ObjectEvents a1 a2 a3 a4 <> ObjectEvents b1 b2 b3 b4 =
+    ObjectEvents
+      (a1 <> b1)
+      (a2 <> b2)
+      (a3 <> b3)
+      (a4 <> b4)
+
+instance Monoid (ObjectEvents msg k) where
+  mempty = ObjectEvents mempty mempty mempty mempty
+
+type ObjectInEvents :: (Type -> Type) -> Type -> Type
+data ObjectInEvents msg k = ObjectInEvents
+  { oie_mailbox :: forall v. Typeable v => msg v -> [(k, v)]
+  }
+
+instance Semigroup (ObjectInEvents msg k) where
+  ObjectInEvents a1 <> ObjectInEvents b1 =
+    ObjectInEvents (a1 <> b1)
+
+instance Monoid (ObjectInEvents msg k) where
+  mempty = ObjectInEvents mempty
+
+type ObjectInput :: (Type -> Type) -> Type -> Type
+data ObjectInput msg k = ObjectInput
+  { oi_fi      :: RawFrameInfo
+  , oi_events  :: ObjectInEvents msg k
+  }
+  deriving stock (Generic)
+
+type ObjectOutput :: (Type -> Type) -> Type -> Type
+data ObjectOutput msg k = ObjectOutput
+  { oo_events :: ObjectEvents msg k
+  , oo_render :: Renderable
+  }
+  deriving stock (Generic)
+
+instance Semigroup (ObjectOutput msg k) where
+  ObjectOutput a1 a2 <> ObjectOutput b1 b2 =
+    ObjectOutput
+      (a1 <> b1)
+      (a2 <> b2)
+
+instance Monoid (ObjectOutput msg k) where
+  mempty = ObjectOutput mempty mempty
+
+
+
+
 
 data GameState = GameState
   deriving (Eq, Ord, Show, Read)
@@ -93,7 +178,7 @@ type Renderable = IO ()
 data FrameInfo' a = FrameInfo
   { fi_controls :: Controls
   , fi_dt :: Double
-  , fi_global :: ~a
+  , fi_ext :: a
   }
   deriving stock Generic
 
