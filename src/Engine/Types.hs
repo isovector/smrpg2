@@ -49,6 +49,8 @@ data Controls = Controls
   , c_dir   :: V2 Int
   , c_ok      :: Bool
   , c_cancel  :: Bool
+  , c_spell :: Bool
+  , c_item :: Bool
   }
   deriving (Eq, Ord, Show, Read)
 

@@ -63,7 +63,7 @@ main = do -- ALUT.withProgNameAndArgs ALUT.runALUT $ \_ _ -> do
   tRef <- newIORef seconds
 
   reactimate
-    (pure $ FrameInfo (Controls False False False False 0 False False) 0.016 ())
+    (pure $ FrameInfo (Controls False False False False 0 False False False False) 0.016 ())
     (input window tRef)
     (output engine)
     game

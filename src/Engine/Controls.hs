@@ -11,8 +11,10 @@ parseControls check = Controls
   , c_right = check ScancodeRight
   , c_up    = check ScancodeUp
   , c_down  = check ScancodeDown
-  , c_ok  = check ScancodeZ
-  , c_cancel  = check ScancodeX
+  , c_ok  = check ScancodeD
+  , c_cancel  = check ScancodeS
+  , c_item = check ScancodeW
+  , c_spell = check ScancodeA
   , c_dir   =
       V2
         (toOne ScancodeRight - toOne ScancodeLeft)

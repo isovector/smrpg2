@@ -35,7 +35,6 @@ library
       Engine.Types
       Engine.Utils
       Game
-      Lib
       SDL.JuicyPixels
   other-modules:
       Paths_notld
