@@ -6,12 +6,12 @@ module Engine.FRP
   ) where
 
 import Control.Monad.Cont
-import Data.Monoid
-import FRP.Yampa hiding ((*^), fromEvent)
 import Data.Bifunctor
-import Data.Tuple (swap)
-import Data.Foldable (traverse_)
 import Data.Bool (bool)
+import Data.Foldable (traverse_)
+import Data.Monoid
+import Data.Tuple (swap)
+import FRP.Yampa hiding ((*^), fromEvent)
 
 newtype Swont i o a = Swont
   { runSwont' :: Cont (SF i o) a
@@ -27,7 +27,7 @@ dswont = Swont . cont . dSwitch
 
 
 waitFor :: SF a (Event c) -> SF a b -> Swont a b c
-waitFor ev sf = swont $ (,) <$> sf <*> ev
+waitFor ev sf = dswont $ (,) <$> sf <*> ev
 
 waitForEdge :: (a -> Bool) -> SF a b -> Swont a b ()
 waitForEdge f = waitFor (arr f >>> edge)

@@ -1,7 +1,11 @@
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs     #-}
 
 module Game where
 
+import Control.Concurrent
+import qualified Data.Map as M
+import Data.Map (Map)
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Except
@@ -39,7 +43,7 @@ selectFighter
   :: BattleState
   -> (BattleFighter -> Bool)
   -> BattleMenu
-  -> ExceptT BattleMenu (Swont RawFrameInfo Renderable) BattleFighter
+  -> ExceptT BattleMenu (Swont RawFrameInfo (ObjectOutput m k)) BattleFighter
 selectFighter bs p me = ExceptT $ swont $ loopPre 0 $ proc (rfi, ix) -> do
   let sel_part = parts !! ix
 
@@ -59,7 +63,7 @@ selectFighter bs p me = ExceptT $ swont $ loopPre 0 $ proc (rfi, ix) -> do
         ]
 
   returnA -<
-    ( ( mconcat
+    ( ( mempty & field' @"oo_render" .~ mconcat
           [ drawFilledRect (V4 255 0 255 255) $ Rectangle (P $ bp_pos sel_part - 10) 10
           , drawText 12 (V3 0 0 0) (display $ bp_name sel_part) $ bp_pos sel_part + V2 0 30
           ]
@@ -72,7 +76,7 @@ selectFighter bs p me = ExceptT $ swont $ loopPre 0 $ proc (rfi, ix) -> do
   len = length $ parts
 
 
-menu :: Display a => [a] -> BattleMenu -> ExceptT BattleMenu (Swont RawFrameInfo Renderable) a
+menu :: Display a => [a] -> BattleMenu -> ExceptT BattleMenu (Swont RawFrameInfo (ObjectOutput m k)) a
 menu opts me = ExceptT $ swont $ loopPre 0 $ proc (rfi, ix) -> do
   close <- handleClose -< rfi
   let ev = do
@@ -102,7 +106,7 @@ menu opts me = ExceptT $ swont $ loopPre 0 $ proc (rfi, ix) -> do
             ]
         ]
 
-  returnA -< ((out, asum [ ev, fmap Left close ] ), fromEvent id update_ix ix)
+  returnA -< ((mempty & field' @"oo_render" .~ out, asum [ ev, fmap Left close ] ), fromEvent id update_ix ix)
  where
   len = length opts
 
@@ -240,7 +244,7 @@ testTimedHits = runSwont undefined $ fix $ \loop -> do
 
 
 
-battleMenu :: Maybe BattleMenu -> Swont RawFrameInfo Renderable (BattleAction, Maybe BattleFighter)
+battleMenu :: Maybe BattleMenu -> Swont RawFrameInfo (ObjectOutput m k) (BattleAction, Maybe BattleFighter)
 battleMenu m = do
   result <- runExceptT $ do
     (mode, action) <- case m of
@@ -264,10 +268,12 @@ renderBattle = proc rfi -> do
 
 
 game :: SF RawFrameInfo Renderable
-game = proc rfi -> do
-  battle <- renderBattle -< rfi
-  menus <- runSwont (error . show) $ battleMenu Nothing -< rfi
-  returnA -< battle <> menus
+game = testRouter
+
+--   proc rfi -> do
+--   battle <- renderBattle -< rfi
+--   menus <- runSwont (error . show) $ battleMenu Nothing -< rfi
+--   returnA -< battle <> menus
 
 data HeroKey
   = Hero1
@@ -280,8 +286,37 @@ data FighterId
   = HeroKey HeroKey
   deriving (Eq, Ord, Show)
 
-data Test a where
-  Test :: Test Int
+data TestMsg a where
+  Test :: TestMsg Color
 
-deriving instance Eq (Test a)
+deriving instance Eq (TestMsg a)
+
+
+testRouter :: SF RawFrameInfo Renderable
+testRouter = proc rfi -> do
+  cc <- router @TestMsg undefined (ObjectMap mempty (M.fromList
+    [ (Hero1, proc oi -> do
+        bm <- runSwont (const $ constant $ mempty
+                          { oo_events = mempty
+                              { oe_die   = Event ()
+                              , oe_send_message = Event [(Hero2, SomeMsg Test $ V4 255 255 255 255)]
+                              }
+                          } ) $ battleMenu Nothing -< oi_fi oi
+        returnA -< bm <> mempty
+          { oo_render = mconcat
+              [ drawFilledRect (V4 255 0 0 255) $ Rectangle (P $ 300) 10
+              ]
+          -- , oo_events = mempty & field' @"oe_send_message" .~ (fmap (pure . const (Hero2, SomeMsg Test $ V4 255 255 255 255) . fst) choice)
+          }
+      )
+    , (Hero2, proc oi -> do
+        let z = asum $ fmap (Event . snd) $ oie_mailbox (oi_events oi) Test
+        col <- hold (V4 0 0 0 255) -< z
+        returnA -< mempty
+          { oo_render = drawFilledRect col
+          $ Rectangle (P $ 400) 10
+          }
+      )
+    ])) -< rfi
+  returnA -< foldMap oo_render cc
 

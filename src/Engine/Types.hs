@@ -19,6 +19,7 @@ module Engine.Types
   , Event
   , coerce
   , module Control.Lens
+  , module Data.Generics.Product
   , (*^)
   , (^*)
   , _x
@@ -33,6 +34,7 @@ import           Data.Bool (bool)
 import           Data.Coerce
 import           Data.Foldable (toList)
 import           Data.Generics.Labels ()
+import           Data.Generics.Product (field, field')
 import           Data.Kind
 import           Data.Map.Strict (Map)
 import           Data.Typeable
