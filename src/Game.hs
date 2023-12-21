@@ -40,10 +40,11 @@ handleClose = proc rfi -> do
 
 
 selectFighter
-  :: BattleState
+  :: Monoid s
+  => BattleState
   -> (BattleFighter -> Bool)
   -> BattleMenu
-  -> ExceptT BattleMenu (Swont RawFrameInfo (ObjectOutput m k)) BattleFighter
+  -> ExceptT BattleMenu (Swont RawFrameInfo (ObjectOutput m k s)) BattleFighter
 selectFighter bs p me = ExceptT $ swont $ loopPre 0 $ proc (rfi, ix) -> do
   let sel_part = parts !! ix
 
@@ -76,7 +77,11 @@ selectFighter bs p me = ExceptT $ swont $ loopPre 0 $ proc (rfi, ix) -> do
   len = length $ parts
 
 
-menu :: Display a => [a] -> BattleMenu -> ExceptT BattleMenu (Swont RawFrameInfo (ObjectOutput m k)) a
+menu
+    :: (Monoid s, Display a)
+    => [a]
+    -> BattleMenu
+    -> ExceptT BattleMenu (Swont RawFrameInfo (ObjectOutput m k s)) a
 menu opts me = ExceptT $ swont $ loopPre 0 $ proc (rfi, ix) -> do
   close <- handleClose -< rfi
   let ev = do
@@ -165,6 +170,13 @@ data BattleFighter = BattleFighter
   }
   deriving (Eq, Ord, Show)
 
+instance Semigroup BattleFighter where
+  BattleFighter a1 a2 a3 a4 a5 <> BattleFighter b1 b2 b3 b4 b5
+    = BattleFighter (a1 <> b1) (a2 + b2) (a3) (a4 + b4) (a5 + b5)
+
+instance Monoid BattleFighter where
+  mempty = BattleFighter mempty 0 HeroTeam 0 0
+
 data BattleState = BattleState
   { bs_participants :: [BattleFighter]
   }
@@ -244,7 +256,7 @@ testTimedHits = runSwont undefined $ fix $ \loop -> do
 
 
 
-battleMenu :: Maybe BattleMenu -> Swont RawFrameInfo (ObjectOutput m k) (BattleAction, Maybe BattleFighter)
+battleMenu :: Monoid s => Maybe BattleMenu -> Swont RawFrameInfo (ObjectOutput m k s) (BattleAction, Maybe BattleFighter)
 battleMenu m = do
   result <- runExceptT $ do
     (mode, action) <- case m of
@@ -294,7 +306,7 @@ deriving instance Eq (TestMsg a)
 
 testRouter :: SF RawFrameInfo Renderable
 testRouter = proc rfi -> do
-  cc <- router @TestMsg undefined (ObjectMap mempty (M.fromList
+  cc <- router @TestMsg @BattleFighter undefined (ObjectMap mempty (M.fromList
     [ (Hero1, proc oi -> do
         bm <- runSwont (const $ constant $ mempty
                           { oo_events = mempty
@@ -306,7 +318,6 @@ testRouter = proc rfi -> do
           { oo_render = mconcat
               [ drawFilledRect (V4 255 0 0 255) $ Rectangle (P $ 300) 10
               ]
-          -- , oo_events = mempty & field' @"oe_send_message" .~ (fmap (pure . const (Hero2, SomeMsg Test $ V4 255 255 255 255) . fst) choice)
           }
       )
     , (Hero2, proc oi -> do

@@ -22,6 +22,7 @@ module Engine.Types
   , module Data.Generics.Product
   , (*^)
   , (^*)
+  , (<&>)
   , _x
   , _y
   , distance
@@ -29,7 +30,7 @@ module Engine.Types
   , bool
   ) where
 
-import           Control.Lens ((&), (^.), (.~), (%~), (+~), (-~), (<>~), view, set, over, preview, review)
+import           Control.Lens ((&), (^.), (.~), (%~), (+~), (-~), (<>~), view, set, over, preview, review, (<&>))
 import           Data.Bool (bool)
 import           Data.Coerce
 import           Data.Foldable (toList)
@@ -80,18 +81,18 @@ data ObjectMap msg k a = ObjectMap
 data Message a where
   deriving stock (Eq, Ord, Show, Read, Generic)
 
-type ObjSF msg k = SF (ObjectInput msg k) (ObjectOutput msg k)
+type ObjSF msg k s = SF (ObjectInput msg k s) (ObjectOutput msg k s)
 
-type ObjectEvents :: (Type -> Type) -> Type -> Type
-data ObjectEvents msg k = ObjectEvents
+type ObjectEvents :: (Type -> Type) -> Type -> Type -> Type
+data ObjectEvents msg k s = ObjectEvents
   { oe_die               :: Event ()
-  , oe_spawn             :: Event [(Maybe k, ObjSF msg k)]
+  , oe_spawn             :: Event [(Maybe k, ObjSF msg k s)]
   , oe_send_message      :: Event [(k, SomeMsg msg)]
   , oe_broadcast_message :: Event [SomeMsg msg]
   }
   deriving stock (Generic)
 
-instance Semigroup (ObjectEvents msg k) where
+instance Semigroup (ObjectEvents msg k s) where
   ObjectEvents a1 a2 a3 a4 <> ObjectEvents b1 b2 b3 b4 =
     ObjectEvents
       (a1 <> b1)
@@ -99,7 +100,7 @@ instance Semigroup (ObjectEvents msg k) where
       (a3 <> b3)
       (a4 <> b4)
 
-instance Monoid (ObjectEvents msg k) where
+instance Monoid (ObjectEvents msg k s) where
   mempty = ObjectEvents mempty mempty mempty mempty
 
 type ObjectInEvents :: (Type -> Type) -> Type -> Type
@@ -114,28 +115,32 @@ instance Semigroup (ObjectInEvents msg k) where
 instance Monoid (ObjectInEvents msg k) where
   mempty = ObjectInEvents mempty
 
-type ObjectInput :: (Type -> Type) -> Type -> Type
-data ObjectInput msg k = ObjectInput
-  { oi_fi      :: RawFrameInfo
-  , oi_events  :: ObjectInEvents msg k
+type ObjectInput :: (Type -> Type) -> Type -> Type -> Type
+data ObjectInput msg k s = ObjectInput
+  { oi_fi       :: RawFrameInfo
+  , oi_self     :: k
+  , oi_everyone :: Map k s
+  , oi_events   :: ObjectInEvents msg k
   }
-  deriving stock (Generic)
+  deriving stock (Functor, Generic)
 
-type ObjectOutput :: (Type -> Type) -> Type -> Type
-data ObjectOutput msg k = ObjectOutput
-  { oo_events :: ObjectEvents msg k
+type ObjectOutput :: (Type -> Type) -> Type -> Type -> Type
+data ObjectOutput msg k s = ObjectOutput
+  { oo_events :: ObjectEvents msg k s
   , oo_render :: Renderable
+  , oo_state  :: s
   }
   deriving stock (Generic)
 
-instance Semigroup (ObjectOutput msg k) where
-  ObjectOutput a1 a2 <> ObjectOutput b1 b2 =
+instance Semigroup s => Semigroup (ObjectOutput msg k s) where
+  ObjectOutput a1 a2 a3 <> ObjectOutput b1 b2 b3 =
     ObjectOutput
       (a1 <> b1)
       (a2 <> b2)
+      (a3 <> b3)
 
-instance Monoid (ObjectOutput msg k) where
-  mempty = ObjectOutput mempty mempty
+instance Monoid s => Monoid (ObjectOutput msg k s) where
+  mempty = ObjectOutput mempty mempty mempty
 
 
 

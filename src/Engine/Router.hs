@@ -6,6 +6,7 @@ module Engine.Router where
 
 import           Control.Lens (at, non)
 import           Control.Monad
+import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
@@ -16,9 +17,9 @@ spawn
     :: Ord k
     => (forall x. ObjectMap msg k x -> k)
     -> Maybe k
-    -> ObjSF msg k
-    -> ObjectMap msg k (ObjSF msg k)
-    -> ObjectMap msg k (ObjSF msg k)
+    -> ObjSF msg k s
+    -> ObjectMap msg k (ObjSF msg k s)
+    -> ObjectMap msg k (ObjSF msg k s)
 spawn gen Nothing sf m = m & #objm_map %~ M.insert (gen m) sf
 spawn _ (Just k) sf m = m & #objm_map %~ M.insert k sf
 
@@ -27,8 +28,8 @@ send
     => k
     -> k
     -> SomeMsg msg
-    -> ObjectMap msg k (ObjSF msg k)
-    -> ObjectMap msg k (ObjSF msg k)
+    -> ObjectMap msg k (ObjSF msg k s)
+    -> ObjectMap msg k (ObjSF msg k s)
 send from to msg = #objm_undeliveredMsgs . at to . non mempty <>~ [(traceShowId from, msg)]
 
 recv :: forall k v msg. (Typeable v, Eq (msg v)) => [(k, SomeMsg msg)] -> msg v -> [(k, v)]
@@ -40,23 +41,36 @@ recv ((from, SomeMsg key (val :: v')) : xs) tag
   | otherwise = recv xs tag
 
 router
-    :: forall msg k
+    :: forall msg s k
      . ( Show k, Ord k
        , forall v. Eq (msg v)
        )
     => (forall x. ObjectMap msg k x -> k)
-    -> ObjectMap msg k (ObjSF msg k)
-    -> SF RawFrameInfo (ObjectMap msg k (ObjectOutput msg k))
+    -> ObjectMap msg k (ObjSF msg k s)
+    -> SF RawFrameInfo (ObjectMap msg k (ObjectOutput msg k s))
 router gen st =
+  loopPre mempty $
+    router' gen st <&> \om ->
+      (om, fmap oo_state $ objm_map om)
+
+router'
+    :: forall msg k s
+     . ( Show k, Ord k
+       , forall v. Eq (msg v)
+       )
+    => (forall x. ObjectMap msg k x -> k)
+    -> ObjectMap msg k (ObjSF msg k s)
+    -> SF (RawFrameInfo, Map k s) (ObjectMap msg k (ObjectOutput msg k s))
+router' gen st =
   pSwitch
     @(ObjectMap msg k)
-    @RawFrameInfo
-    @(ObjectInput msg k)
-    @(ObjectOutput msg k)
-    @(Endo (ObjectMap msg k (ObjSF msg k)))
-    (\rfi col -> col & #objm_map %~
+    @(RawFrameInfo, Map k s)
+    @(ObjectInput msg k s)
+    @(ObjectOutput msg k s)
+    @(Endo (ObjectMap msg k (ObjSF msg k s)))
+    (\(rfi, prev) col -> col & #objm_map %~
         (M.mapWithKey $ \k ->
-          (ObjectInput rfi
+          (ObjectInput rfi k prev
             $ ObjectInEvents
             $ recv
             $ join
@@ -76,7 +90,5 @@ router gen st =
               ])
      >>> notYet)
     )
-    (\new f -> router gen $ appEndo f $ new & #objm_undeliveredMsgs .~ mempty)
-
-
+    (\new f -> router' gen $ appEndo f $ new & #objm_undeliveredMsgs .~ mempty)
 
