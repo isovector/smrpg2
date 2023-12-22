@@ -54,6 +54,9 @@ timedSequence d interval sfs =
 runSwont :: (a -> SF i o) -> Swont i o a -> SF i o
 runSwont end sw = runCont (runSwont' sw) end
 
+foreverSwont :: Swont i o a -> SF i o
+foreverSwont sw = runCont (runSwont' $ forever sw) $ error "impossible"
+
 
 deriving via (Ap (SF i) o) instance Semigroup o => Semigroup (SF i o)
 deriving via (Ap (SF i) o) instance Monoid o    => Monoid    (SF i o)
@@ -66,6 +69,12 @@ instance Semigroup o => Semigroup (Event o) where
 
 instance Semigroup o => Monoid (Event o) where
   mempty = noEvent
+
+
+get :: (i -> r) -> SF i o -> Swont i o r
+get f sf = dswont $ proc i -> do
+  o <- sf -< i
+  returnA -< (o, Event $ f i)
 
 
 -- | Perform the given action for a single frame, rendering the next step of

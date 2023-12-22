@@ -14,14 +14,14 @@ import           Data.Typeable
 import           Engine.Types hiding (tag)
 
 spawn
-    :: Ord k
+    :: (Ord k, Show k)
     => (forall x. ObjectMap msg k x -> k)
     -> Maybe k
     -> ObjSF msg k s
     -> ObjectMap msg k (ObjSF msg k s)
     -> ObjectMap msg k (ObjSF msg k s)
-spawn gen Nothing sf m = m & #objm_map %~ M.insert (gen m) sf
-spawn _ (Just k) sf m = m & #objm_map %~ M.insert k sf
+spawn gen Nothing sf m = m & #objm_map %~ M.insert (traceShowId $ gen m) sf
+spawn _ (Just k) sf m = m & #objm_map %~ M.insert (traceShowId k) sf
 
 send
     :: (Show k, Ord k)
@@ -30,7 +30,7 @@ send
     -> SomeMsg msg
     -> ObjectMap msg k (ObjSF msg k s)
     -> ObjectMap msg k (ObjSF msg k s)
-send from to msg = #objm_undeliveredMsgs . at to . non mempty <>~ [(traceShowId from, msg)]
+send from to msg = #objm_undeliveredMsgs . at to . non mempty <>~ [(from, msg)]
 
 recv :: forall k v msg. (Typeable v, Eq (msg v)) => [(k, SomeMsg msg)] -> msg v -> [(k, v)]
 recv [] _ = []
@@ -42,7 +42,7 @@ recv ((from, SomeMsg key (val :: v')) : xs) tag
 
 router
     :: forall msg s k
-     . ( Show k, Ord k
+     . ( Show k, Ord k, Show s
        , forall v. Eq (msg v)
        )
     => (forall x. ObjectMap msg k x -> k)

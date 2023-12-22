@@ -3,6 +3,7 @@
 
 module Game where
 
+import Control.Lens (at, _Just)
 import Control.Concurrent
 import qualified Data.Map as M
 import Data.Map (Map)
@@ -167,7 +168,7 @@ data BattleFighter = BattleFighter
   , bp_color :: Color
   , bp_pos   :: V2 Double
   }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 instance Semigroup BattleFighter where
   BattleFighter a1 a2 a3 a4 a5 <> BattleFighter b1 b2 b3 b4 b5
@@ -302,20 +303,52 @@ menuObject owner = (Menu, ) $ proc oi -> do
               }
         }) $ battleMenu Nothing -< (oi_fi oi, oi_everyone oi)
 
+initialize :: (Show s, Ord k) => s -> ObjSF m k s -> ObjSF m k s
+initialize s sf = proc oi -> do
+  start <- now () -< ()
+  oo <- sf -< event id (const $ #oi_everyone . at (oi_self oi) . _Just .~ s) start oi
+  returnA -< event id (const $ #oo_state .~ s) start oo
+
+heroHandler :: ObjSF BattleMessage FighterId BattleFighter
+heroHandler = foreverSwont $ do
+  !_ <- traceM "hello"
+  pos <- get (bp_pos . oi_state) $ drawMe 0
+  traceM $ show pos
+  (action, target) <- swont $ proc oi -> do
+    me <- drawMe 0 -< oi
+    let ev = asum $ fmap (Event . snd) $ oie_mailbox (oi_events oi) DoAction
+    returnA -< (me, ev)
+  case action of
+    Defend -> do
+      let dur = 2
+      dswont $ proc oi -> do
+        end <- after dur () -< ()
+        oo <- drawMe (-20) -< oi
+        returnA -< ( oo
+                        & #oo_events . #oe_spawn <>~ ([first Just $ menuObject $ HeroKey $ Hero1] <$ end)
+                   , end)
+      !_ <- traceM "all done"
+      pure ()
+
+  where
+    drawMe :: V2 Double -> ObjSF BattleMessage FighterId BattleFighter
+    drawMe offset = proc oi -> do
+      returnA -< ObjectOutput
+        { oo_state = oi_state oi
+        , oo_events = mempty
+        , oo_render = drawFilledRect (V4 0 0 0 255)
+            $ Rectangle (P $ (bp_pos $ oi_state oi) + offset) 10
+        }
+
+
+
+
 
 testRouter :: SF RawFrameInfo Renderable
 testRouter = proc rfi -> do
   cc <- router @BattleMessage @BattleFighter undefined $ ObjectMap mempty $ M.fromList
     [
-      (HeroKey Hero1, proc oi -> do
-        -- let z = asum $ fmap (Event . snd) $ oie_mailbox (oi_events oi) Test
-        -- col <- hold (V4 0 0 0 255) -< z
-        let col = V4 0 0 0 255
-        returnA -< mempty
-          { oo_render = drawFilledRect col
-          $ Rectangle (P $ 300) 10
-          }
-      )
+      (HeroKey Hero1, initialize horton heroHandler)
     , (HeroKey Hero2, proc oi -> do
         -- let z = asum $ fmap (Event . snd) $ oie_mailbox (oi_events oi) Test
         -- col <- hold (V4 0 0 0 255) -< z
@@ -325,7 +358,7 @@ testRouter = proc rfi -> do
           $ Rectangle (P $ 400) 10
           }
       )
-    , menuObject $ HeroKey Hero2
+    , menuObject $ HeroKey Hero1
     ] -< rfi
   returnA -< foldMap oo_render cc
 

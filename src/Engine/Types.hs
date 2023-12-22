@@ -37,7 +37,9 @@ import           Data.Foldable (toList)
 import           Data.Generics.Labels ()
 import           Data.Generics.Product (field, field')
 import           Data.Kind
+import qualified Data.Map as M
 import           Data.Map.Strict (Map)
+import           Data.Maybe
 import           Data.Typeable
 import           Data.Word
 import           Debug.Trace (trace, traceShowId, traceM)
@@ -108,6 +110,9 @@ data ObjectInEvents msg k = ObjectInEvents
   { oie_mailbox :: forall v. Typeable v => msg v -> [(k, v)]
   }
 
+instance Show (ObjectInEvents msg k) where
+  show _ = "<InEvents>"
+
 instance Semigroup (ObjectInEvents msg k) where
   ObjectInEvents a1 <> ObjectInEvents b1 =
     ObjectInEvents (a1 <> b1)
@@ -122,7 +127,10 @@ data ObjectInput msg k s = ObjectInput
   , oi_everyone :: Map k s
   , oi_events   :: ObjectInEvents msg k
   }
-  deriving stock (Functor, Generic)
+  deriving stock (Functor, Generic, Show)
+
+oi_state :: (Monoid s, Ord k) => ObjectInput msg k s -> s
+oi_state oi = fromMaybe mempty $ M.lookup (oi_self oi) $ oi_everyone oi
 
 type ObjectOutput :: (Type -> Type) -> Type -> Type -> Type
 data ObjectOutput msg k s = ObjectOutput
@@ -187,7 +195,7 @@ data FrameInfo' a = FrameInfo
   , fi_dt :: Double
   , fi_ext :: a
   }
-  deriving stock Generic
+  deriving stock (Show, Generic)
 
 type FrameInfo = FrameInfo' ()
 type RawFrameInfo = FrameInfo' ()
