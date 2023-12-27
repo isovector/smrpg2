@@ -6,7 +6,6 @@ module Engine.Router where
 
 import           Control.Lens (at, non)
 import           Control.Monad
-import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
@@ -14,23 +13,23 @@ import           Data.Typeable
 import           Engine.Types hiding (tag)
 
 spawn
-    :: (Ord k, Show k)
-    => (forall x. ObjectMap msg k x -> k)
+    :: (Ord k)
+    => (forall x. ObjectMap msg k s x -> k)
     -> Maybe k
-    -> ObjSF msg k s
-    -> ObjectMap msg k (ObjSF msg k s)
-    -> ObjectMap msg k (ObjSF msg k s)
-spawn gen Nothing sf m = m & #objm_map %~ M.insert (traceShowId $ gen m) sf
-spawn _ (Just k) sf m = m & #objm_map %~ M.insert (traceShowId k) sf
+    -> s
+    -> ObjSF msg c k s
+    -> ObjectMap msg k s (ObjSF msg c k s)
+    -> ObjectMap msg k s (ObjSF msg c k s)
+spawn gen Nothing s sf m = m & #objm_map %~ M.insert (gen m) (s, sf)
+spawn _ (Just k)  s sf m = m & #objm_map %~ M.insert k (s, sf)
 
 send
-    :: (Show k, Ord k)
+    :: (Ord k)
     => k
     -> k
     -> SomeMsg msg
-    -> ObjectMap msg k (ObjSF msg k s)
-    -> ObjectMap msg k (ObjSF msg k s)
-send from to msg = #objm_undeliveredMsgs . at to . non mempty <>~ [(from, msg)]
+    -> Endo (ObjectMap msg k s (ObjSF msg c k s))
+send from to msg = Endo $ #objm_undeliveredMsgs . at to . non mempty <>~ [(from, msg)]
 
 recv :: forall k v msg. (Typeable v, Eq (msg v)) => [(k, SomeMsg msg)] -> msg v -> [(k, v)]
 recv [] _ = []
@@ -40,55 +39,60 @@ recv ((from, SomeMsg key (val :: v')) : xs) tag
   = (from, val) : recv xs tag
   | otherwise = recv xs tag
 
-router
-    :: forall msg s k
-     . ( Show k, Ord k, Show s
-       , forall v. Eq (msg v)
-       )
-    => (forall x. ObjectMap msg k x -> k)
-    -> ObjectMap msg k (ObjSF msg k s)
-    -> SF RawFrameInfo (ObjectMap msg k (ObjectOutput msg k s))
-router gen st =
-  loopPre mempty $
-    router' gen st <&> \om ->
-      (om, fmap oo_state $ objm_map om)
+decodeCommand
+    :: Ord k
+    => (forall x. M.Map k x -> k)
+    -> (k -> c -> Endo (ObjectMap msg k s (ObjSF msg c k s)))
+    -> k
+    -> Command msg c k s
+    -> Endo (ObjectMap msg k s (ObjSF msg c k s))
+decodeCommand _ _ from Die = Endo $ #objm_map %~ M.delete from
+decodeCommand gen _ _ (Spawn k s obj) = Endo $ #objm_map %~ \oo -> M.insert (fromMaybe (gen oo) k) (s, obj) oo
+decodeCommand _ _ from (Broadcast msg)
+  = Endo $ \objm -> flip appEndo objm
+                  $ foldMap (flip (send from) msg)
+                  $ M.keys
+                  $ objm_map objm
+decodeCommand _ other from (OtherCommand c) = other from c
 
-router'
-    :: forall msg k s
+router
+    :: forall msg c k s
      . ( Show k, Ord k
        , forall v. Eq (msg v)
        )
-    => (forall x. ObjectMap msg k x -> k)
-    -> ObjectMap msg k (ObjSF msg k s)
-    -> SF (RawFrameInfo, Map k s) (ObjectMap msg k (ObjectOutput msg k s))
-router' gen st =
+    => (forall x. M.Map k x -> k)
+    -> (k -> c -> Endo (ObjectMap msg k s (ObjSF msg c k s)))
+    -> ObjectMap msg k s (ObjSF msg c k s)
+    -> SF (RawFrameInfo) (ObjectMap msg k s (ObjectOutput msg c k s))
+router gen other st =
   pSwitch
-    @(ObjectMap msg k)
-    @(RawFrameInfo, Map k s)
+    @(ObjectMap msg k s)
+    @(RawFrameInfo)
     @(ObjectInput msg k s)
-    @(ObjectOutput msg k s)
-    @(Endo (ObjectMap msg k (ObjSF msg k s)))
-    (\(rfi, prev) col -> col & #objm_map %~
-        (M.mapWithKey $ \k ->
-          (ObjectInput rfi k prev
+    @(ObjectOutput msg c k s)
+    @(Endo (ObjectMap msg k s (ObjSF msg c k s)))
+    (\rfi col -> col & #objm_map %~
+        (M.mapWithKey $ \k (s, a) -> (s, )
+            $ (ObjectInput rfi k (fmap fst $ objm_map col)
             $ ObjectInEvents
             $ recv
             $ join
             $ maybeToList
             $ M.lookup k
             $ objm_undeliveredMsgs col
-          , )))
+          , ) a
+        ))
     st
     ((arr (\(_, om) ->
       flip mappend (pure $ Endo id)
         $ flip foldMap (M.toList $ objm_map om)
-        $ \(k, oo_events -> ObjectEvents {..}) ->
-            mconcat
-              [ Endo (#objm_map %~ M.delete k)       <$  oe_die
-              , foldMap (Endo . uncurry (spawn gen)) <$> oe_spawn
-              , foldMap (Endo . uncurry (send k))    <$> oe_send_message
-              ])
+        $ \(k, (_, oo)) ->
+            pure $ mconcat
+              [ flip foldMap (oo_outbox oo) $ uncurry (send k)
+              , flip foldMap (oo_commands oo) $ decodeCommand gen other k
+              ]
+          )
      >>> notYet)
     )
-    (\new f -> router' gen $ appEndo f $ new & #objm_undeliveredMsgs .~ mempty)
+    (\new f -> router gen other $ appEndo f $ new & #objm_undeliveredMsgs .~ mempty)
 

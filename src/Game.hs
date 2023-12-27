@@ -4,7 +4,6 @@
 module Game where
 
 import Control.Lens (at, _Just)
-import Control.Concurrent
 import qualified Data.Map as M
 import Data.Map (Map)
 import Control.Applicative
@@ -17,6 +16,7 @@ import Engine.Drawing
 import Engine.Router
 import Engine.Types
 import Engine.Utils
+import Data.Void
 
 
 menuButton :: BattleMenu -> Controls -> Bool
@@ -42,10 +42,9 @@ handleClose = proc rfi -> do
 type BattleState = Map FighterId BattleFighter
 
 selectFighter
-  :: Monoid s
-  => (FighterId -> Bool)
+  :: (FighterId -> Bool)
   -> BattleMenu
-  -> ExceptT BattleMenu (Swont (RawFrameInfo, BattleState) (ObjectOutput m k s)) FighterId
+  -> ExceptT BattleMenu (Swont (RawFrameInfo, BattleState) (ObjectOutput m c k BattleFighter)) FighterId
 selectFighter p me = ExceptT $ swont $ loopPre 0 $ proc ((rfi, bs), ix) -> do
   let parts = sortOn (view _x . bp_pos . snd) $ filter (p . fst) $ M.assocs bs
       len = length $ parts
@@ -67,20 +66,25 @@ selectFighter p me = ExceptT $ swont $ loopPre 0 $ proc ((rfi, bs), ix) -> do
         ]
 
   returnA -<
-    ( ( mempty & field' @"oo_render" .~ mconcat
-          [ drawFilledRect (V4 255 0 255 255) $ Rectangle (P $ bp_pos sel_part - 10) 10
-          , drawText 12 (V3 0 0 0) (display $ bp_name sel_part) $ bp_pos sel_part + V2 0 30
-          ]
+    ( ( ObjectOutput
+          { oo_render = mconcat
+            [ drawFilledRect (V4 255 0 255 255) $ Rectangle (P $ bp_pos sel_part - 10) 10
+            , drawText 12 (V3 0 0 0) (display $ bp_name sel_part) $ bp_pos sel_part + V2 0 30
+            ]
+          , oo_state = undefined
+          , oo_outbox = mempty
+          , oo_commands = mempty
+          }
       , asum [ev, fmap Left close]
       )
     , clamp 0 (len - 1) $ fromEvent id update_ix ix
     )
 
 menu
-    :: (Monoid s, Display a)
+    :: (Display a)
     => [a]
     -> BattleMenu
-    -> ExceptT BattleMenu (Swont (RawFrameInfo, x) (ObjectOutput m k s)) a
+    -> ExceptT BattleMenu (Swont (RawFrameInfo, x) (ObjectOutput m c k BattleFighter)) a
 menu opts me = ExceptT $ swont $ loopPre 0 $ proc ((rfi, x), ix) -> do
   close <- handleClose -< rfi
   let ev = do
@@ -110,7 +114,13 @@ menu opts me = ExceptT $ swont $ loopPre 0 $ proc ((rfi, x), ix) -> do
             ]
         ]
 
-  returnA -< ((mempty & field' @"oo_render" .~ out, asum [ ev, fmap Left close ] ), fromEvent id update_ix ix)
+  returnA -< ((ObjectOutput
+               { oo_render = out
+               , oo_state = menuFighter
+               , oo_outbox = mempty
+               , oo_commands = mempty
+               }
+              , asum [ ev, fmap Left close ] ), fromEvent id update_ix ix)
  where
   len = length opts
 
@@ -121,7 +131,7 @@ data BattleMenu = AttackMenu | DefendMenu | ItemMenu | SpellMenu
 data Item = Item_TestItem
   deriving (Eq, Ord, Show, Enum, Bounded)
 
-data Team = HeroTeam | EnemyTeam
+data Team = HeroTeam | EnemyTeam | NoTeam
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 instance Display Item where
@@ -174,9 +184,6 @@ instance Semigroup BattleFighter where
   BattleFighter a1 a2 a3 a4 a5 <> BattleFighter b1 b2 b3 b4 b5
     = BattleFighter (a1 <> b1) (a2 + b2) (a3) (a4 + b4) (a5 + b5)
 
-instance Monoid BattleFighter where
-  mempty = BattleFighter mempty 0 HeroTeam 0 0
-
 
 horton :: BattleFighter
 horton = BattleFighter "Horton" 100 HeroTeam (V4 255 0 0 255) 300
@@ -188,6 +195,9 @@ skalp = BattleFighter "Skalp" 100 HeroTeam (V4 255 255 255 255) 400
 
 baddie :: BattleFighter
 baddie = BattleFighter "Baddie" 100 EnemyTeam (V4 0 0 0 255) $ V2 400 200
+
+menuFighter :: BattleFighter
+menuFighter = BattleFighter "menu???" 100 NoTeam (V4 0 0 0 255) $ V2 400 200
 
 
 data FighterSelection
@@ -248,11 +258,11 @@ testTimedHits = runSwont undefined $ fix $ \loop -> do
 
 
 
-battleMenu :: Monoid s => Maybe BattleMenu -> Swont (RawFrameInfo, BattleState) (ObjectOutput m k s) (BattleAction, Maybe FighterId)
+battleMenu :: Maybe BattleMenu -> Swont (RawFrameInfo, BattleState) (ObjectOutput m c k BattleFighter) (BattleAction, Maybe FighterId)
 battleMenu m = do
   result <- runExceptT $ do
     (mode, action) <- case m of
-      Nothing -> ExceptT $ swont $ fmap ((mempty, ) . fmap Left) $ arr fst >>> handleClose
+      Nothing -> ExceptT $ swont $ fmap ((ObjectOutput mempty mempty mempty menuFighter, ) . fmap Left) $ arr fst >>> handleClose
       Just AttackMenu -> fmap (AttackMenu, ) $ menu [Attack] AttackMenu
       Just DefendMenu -> fmap (DefendMenu, ) $ menu [Defend, RunAway] DefendMenu
       Just ItemMenu   -> fmap ((ItemMenu, )  . UseItem)  $ menu [minBound @Item  .. maxBound] ItemMenu
@@ -264,9 +274,6 @@ battleMenu m = do
   either (battleMenu . Just) pure result
 
 
-
-game :: SF RawFrameInfo Renderable
-game = testRouter
 
 --   proc rfi -> do
 --   battle <- renderBattle -< rfi
@@ -291,32 +298,31 @@ data BattleMessage a where
 deriving instance Eq (BattleMessage a)
 
 
-menuObject :: FighterId -> (FighterId, ObjSF BattleMessage FighterId BattleFighter)
-menuObject owner = (Menu, ) $ proc oi -> do
+menuObject :: FighterId -> ObjSF BattleMessage Void FighterId BattleFighter
+menuObject owner = proc oi -> do
   runSwont
     (\(action, target) ->  constant $
-      mempty
-        { oo_events =
-            mempty
-              { oe_die   = Event ()
-              , oe_send_message = Event [(owner, SomeMsg DoAction (action, target))]
-              }
+      ObjectOutput
+        { oo_commands = pure Die
+        , oo_outbox = [(owner, SomeMsg DoAction (action, target))]
+        , oo_state = menuFighter
+        , oo_render = mempty
         }) $ battleMenu Nothing -< (oi_fi oi, oi_everyone oi)
 
-initialize :: (Show s, Ord k) => s -> ObjSF m k s -> ObjSF m k s
+initialize :: Ord k => s -> ObjSF m c k s -> ObjSF m c k s
 initialize s sf = proc oi -> do
   start <- now () -< ()
   oo <- sf -< event id (const $ #oi_everyone . at (oi_self oi) . _Just .~ s) start oi
   returnA -< event id (const $ #oo_state .~ s) start oo
 
-heroHandler :: ObjSF BattleMessage FighterId BattleFighter
+heroHandler :: ObjSF BattleMessage Void FighterId BattleFighter
 heroHandler = foreverSwont $ do
   !_ <- traceM "hello"
   pos <- get (bp_pos . oi_state) $ drawMe 0
   traceM $ show pos
   (action, target) <- swont $ proc oi -> do
     me <- drawMe 0 -< oi
-    let ev = asum $ fmap (Event . snd) $ oie_mailbox (oi_events oi) DoAction
+    let ev = asum $ fmap (Event . snd) $ oie_mailbox (oi_inbox oi) DoAction
     returnA -< (me, ev)
   case action of
     Defend -> do
@@ -325,17 +331,18 @@ heroHandler = foreverSwont $ do
         end <- after dur () -< ()
         oo <- drawMe (-20) -< oi
         returnA -< ( oo
-                        & #oo_events . #oe_spawn <>~ ([first Just $ menuObject $ HeroKey $ Hero1] <$ end)
+                        & #oo_commands <>~ [Spawn (Just Menu) undefined $ menuObject $ HeroKey Hero1 ]
                    , end)
       !_ <- traceM "all done"
       pure ()
 
   where
-    drawMe :: V2 Double -> ObjSF BattleMessage FighterId BattleFighter
+    drawMe :: V2 Double -> ObjSF BattleMessage Void FighterId BattleFighter
     drawMe offset = proc oi -> do
       returnA -< ObjectOutput
         { oo_state = oi_state oi
-        , oo_events = mempty
+        , oo_commands = mempty
+        , oo_outbox = mempty
         , oo_render = drawFilledRect (V4 0 0 0 255)
             $ Rectangle (P $ (bp_pos $ oi_state oi) + offset) 10
         }
@@ -343,22 +350,28 @@ heroHandler = foreverSwont $ do
 
 
 
+game :: SF RawFrameInfo Renderable
+game = testRouter
+
 
 testRouter :: SF RawFrameInfo Renderable
 testRouter = proc rfi -> do
-  cc <- router @BattleMessage @BattleFighter undefined $ ObjectMap mempty $ M.fromList
+  cc <- router @BattleMessage @Void @FighterId @BattleFighter undefined (\case) $ ObjectMap mempty $ M.fromList
     [
-      (HeroKey Hero1, initialize horton heroHandler)
-    , (HeroKey Hero2, proc oi -> do
+      (HeroKey Hero1, (horton, heroHandler))
+    , (HeroKey Hero2, (skalp, proc oi -> do
         -- let z = asum $ fmap (Event . snd) $ oie_mailbox (oi_events oi) Test
         -- col <- hold (V4 0 0 0 255) -< z
         let col = V4 0 0 0 255
-        returnA -< mempty
+        returnA -< ObjectOutput
           { oo_render = drawFilledRect col
-          $ Rectangle (P $ 400) 10
+            $ Rectangle (P $ 400) 10
+          , oo_state = oi_state oi
+          , oo_outbox = mempty
+          , oo_commands = mempty
           }
-      )
-    , menuObject $ HeroKey Hero1
+      ))
+    , (Menu, (menuFighter , menuObject $ HeroKey Hero1))
     ] -< rfi
   returnA -< foldMap oo_render cc
 

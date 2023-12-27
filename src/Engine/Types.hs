@@ -73,37 +73,24 @@ instance Eq (SomeMsg msg) where
 
 
 
-type ObjectMap :: (Type -> Type) -> Type -> Type -> Type
-data ObjectMap msg k a = ObjectMap
+type ObjectMap :: (Type -> Type) -> Type -> Type -> Type -> Type
+data ObjectMap msg k s a = ObjectMap
   { objm_undeliveredMsgs :: Map k [(k, SomeMsg msg)]
-  , objm_map :: Map k a
+  , objm_map :: Map k (s, a)
   }
   deriving stock (Functor, Generic, Foldable)
 
 data Message a where
   deriving stock (Eq, Ord, Show, Read, Generic)
 
-type ObjSF msg k s = SF (ObjectInput msg k s) (ObjectOutput msg k s)
+type ObjSF msg c k s = SF (ObjectInput msg k s) (ObjectOutput msg c k s)
 
-type ObjectEvents :: (Type -> Type) -> Type -> Type -> Type
-data ObjectEvents msg k s = ObjectEvents
-  { oe_die               :: Event ()
-  , oe_spawn             :: Event [(Maybe k, ObjSF msg k s)]
-  , oe_send_message      :: Event [(k, SomeMsg msg)]
-  , oe_broadcast_message :: Event [SomeMsg msg]
-  }
+data Command msg c k s
+  = Die
+  | Spawn (Maybe k) s (ObjSF msg c k s)
+  | Broadcast (SomeMsg msg)
+  | OtherCommand c
   deriving stock (Generic)
-
-instance Semigroup (ObjectEvents msg k s) where
-  ObjectEvents a1 a2 a3 a4 <> ObjectEvents b1 b2 b3 b4 =
-    ObjectEvents
-      (a1 <> b1)
-      (a2 <> b2)
-      (a3 <> b3)
-      (a4 <> b4)
-
-instance Monoid (ObjectEvents msg k s) where
-  mempty = ObjectEvents mempty mempty mempty mempty
 
 type ObjectInEvents :: (Type -> Type) -> Type -> Type
 data ObjectInEvents msg k = ObjectInEvents
@@ -125,30 +112,29 @@ data ObjectInput msg k s = ObjectInput
   { oi_fi       :: RawFrameInfo
   , oi_self     :: k
   , oi_everyone :: Map k s
-  , oi_events   :: ObjectInEvents msg k
+  , oi_inbox    :: ObjectInEvents msg k
   }
   deriving stock (Functor, Generic, Show)
 
-oi_state :: (Monoid s, Ord k) => ObjectInput msg k s -> s
-oi_state oi = fromMaybe mempty $ M.lookup (oi_self oi) $ oi_everyone oi
+oi_state :: Ord k => ObjectInput msg k s -> s
+oi_state oi = fromMaybe (error "uh oh; no state!") $ M.lookup (oi_self oi) $ oi_everyone oi
 
-type ObjectOutput :: (Type -> Type) -> Type -> Type -> Type
-data ObjectOutput msg k s = ObjectOutput
-  { oo_events :: ObjectEvents msg k s
+type ObjectOutput :: (Type -> Type) -> Type -> Type -> Type -> Type
+data ObjectOutput msg c k s = ObjectOutput
+  { oo_outbox :: [(k, SomeMsg msg)]
+  , oo_commands :: [Command msg c k s]
   , oo_render :: Renderable
   , oo_state  :: s
   }
   deriving stock (Generic)
 
-instance Semigroup s => Semigroup (ObjectOutput msg k s) where
-  ObjectOutput a1 a2 a3 <> ObjectOutput b1 b2 b3 =
+instance Semigroup s => Semigroup (ObjectOutput msg c k s) where
+  ObjectOutput a1 a2 a3 a4 <> ObjectOutput b1 b2 b3 b4 =
     ObjectOutput
       (a1 <> b1)
       (a2 <> b2)
       (a3 <> b3)
-
-instance Monoid s => Monoid (ObjectOutput msg k s) where
-  mempty = ObjectOutput mempty mempty mempty
+      (a4 <> b4)
 
 
 
