@@ -87,7 +87,7 @@ type ObjSF msg c k s = SF (ObjectInput msg k s) (ObjectOutput msg c k s)
 
 data Command msg c k s
   = Die
-  | Spawn (Maybe k) s (ObjSF msg c k s)
+  | Spawn (Maybe k) ~s (ObjSF msg c k s)
   | Broadcast (SomeMsg msg)
   | OtherCommand c
   deriving stock (Generic)
@@ -121,10 +121,10 @@ oi_state oi = fromMaybe (error "uh oh; no state!") $ M.lookup (oi_self oi) $ oi_
 
 type ObjectOutput :: (Type -> Type) -> Type -> Type -> Type -> Type
 data ObjectOutput msg c k s = ObjectOutput
-  { oo_outbox :: [(k, SomeMsg msg)]
+  { oo_outbox   :: [(k, SomeMsg msg)]
   , oo_commands :: [Command msg c k s]
-  , oo_render :: Renderable
-  , oo_state  :: s
+  , oo_render   :: Renderable
+  , oo_state    :: ~s
   }
   deriving stock (Generic)
 

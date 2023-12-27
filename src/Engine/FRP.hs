@@ -6,38 +6,43 @@ module Engine.FRP
   ) where
 
 import Control.Monad.Cont
-import Data.Bifunctor
 import Data.Bool (bool)
 import Data.Foldable (traverse_)
 import Data.Monoid
-import Data.Tuple (swap)
 import FRP.Yampa hiding ((*^), fromEvent)
 
-newtype Swont i o a = Swont
-  { runSwont' :: Cont (SF i o) a
+newtype Swont r i o a = Swont
+  { runSwont' :: ContT (o, Event r) (SF i) a
   }
   deriving newtype (Functor, Applicative, Monad)
 
-swont :: SF a (b, Event c) -> Swont a b c
-swont = Swont . cont . switch
+swont :: SF a (b, Event c) -> Swont r a b c
+swont = Swont . ContT . switch . (>>> arr (\(b, ev) -> ((b, NoEvent), ev)))
+
+dswont :: SF a (b, Event c) -> Swont r a b c
+dswont = Swont . ContT . switch . (>>> arr (\(b, ev) -> ((b, NoEvent), ev)))
+
+getSwont :: Swont r i o r -> SF i (Either o r)
+getSwont (runSwont' -> sw) = proc i -> do
+  (o, ev) <- (runContT sw $ \r -> pure (undefined, Event r)) -< i
+  returnA -< event (Left o) Right ev
+
+runSwont :: (a -> SF i o) -> Swont r i o a -> SF i o
+runSwont k (runSwont' -> sw) = fmap fst $ runContT sw $ fmap (, NoEvent) . k
 
 
-dswont :: SF a (b, Event c) -> Swont a b c
-dswont = Swont . cont . dSwitch
-
-
-waitFor :: SF a (Event c) -> SF a b -> Swont a b c
+waitFor :: SF a (Event c) -> SF a b -> Swont r a b c
 waitFor ev sf = dswont $ (,) <$> sf <*> ev
 
-waitForEdge :: (a -> Bool) -> SF a b -> Swont a b ()
+waitForEdge :: (a -> Bool) -> SF a b -> Swont r a b ()
 waitForEdge f = waitFor (arr f >>> edge)
 
 
-timed :: Double -> SF a b -> Swont a b ()
+timed :: Double -> SF a b -> Swont r a b ()
 timed dur sf = waitFor (after dur ()) sf
 
 
-lerpSF :: Double -> SF Double b -> Swont a b ()
+lerpSF :: Double -> SF Double b -> Swont r a b ()
 lerpSF dur sf = timed dur $ localTime >>> arr (/ dur) >>> sf
 
 
@@ -51,11 +56,8 @@ timedSequence d interval sfs =
     traverse_ (swont . (&&& after interval ())) sfs
 
 
-runSwont :: (a -> SF i o) -> Swont i o a -> SF i o
-runSwont end sw = runCont (runSwont' sw) end
-
-foreverSwont :: Swont i o a -> SF i o
-foreverSwont sw = runCont (runSwont' $ forever sw) $ error "impossible"
+foreverSwont :: Swont r i o a -> SF i o
+foreverSwont = runSwont (error "impossible") . forever
 
 
 deriving via (Ap (SF i) o) instance Semigroup o => Semigroup (SF i o)
@@ -71,51 +73,51 @@ instance Semigroup o => Monoid (Event o) where
   mempty = noEvent
 
 
-get :: (i -> r) -> SF i o -> Swont i o r
+get :: (i -> a) -> SF i o -> Swont r i o a
 get f sf = dswont $ proc i -> do
   o <- sf -< i
   returnA -< (o, Event $ f i)
 
 
--- | Perform the given action for a single frame, rendering the next step of
--- the Swont for that frame.
-momentary :: Semigroup o => o -> Swont i o ()
-momentary what = Swont $ cont $ \ f ->
-  dSwitch
-    (proc i -> do
-      io <- constant what -< ()
-      k  <- f () -< i
-      ev <- now () -< ()
-      returnA -< (io <> k, ev)
-    )
-    $ const $ f ()
+-- -- | Perform the given action for a single frame, rendering the next step of
+-- -- the Swont for that frame.
+-- momentary :: Semigroup o => o -> Swont r i o ()
+-- momentary what = Swont $ cont $ \ f ->
+--   dSwitch
+--     (proc i -> do
+--       io <- constant what -< ()
+--       k  <- f () -< i
+--       ev <- now () -< ()
+--       returnA -< (io <> k, ev)
+--     )
+--     $ const $ f ()
 
-data Resumption s o = Resumption
-  { r_state  :: !s
-  , r_output :: !o
-  , r_stop  :: !(Event ())
-  }
-  deriving stock Functor
+-- data Resumption s o = Resumption
+--   { r_state  :: !s
+--   , r_output :: !o
+--   , r_stop  :: !(Event ())
+--   }
+--   deriving stock Functor
 
-instance Bifunctor Resumption where
-  bimap fab fcd (Resumption a c ev) = Resumption
-    { r_state = fab a
-    , r_output = fcd c
-    , r_stop = ev
-    }
+-- instance Bifunctor Resumption where
+--   bimap fab fcd (Resumption a c ev) = Resumption
+--     { r_state = fab a
+--     , r_output = fcd c
+--     , r_stop = ev
+--     }
 
--- | A 'Resumable' is a signal function with state. The final state is returned
--- by 'runResumable', meaning you can resume it exactly where you left off.
-newtype Resumable s i o = Resumable
-  { unResumable :: SF (s, i) (Resumption s o)
-  }
-  deriving stock Functor
+-- -- | A 'Resumable' is a signal function with state. The final state is returned
+-- -- by 'runResumable', meaning you can resume it exactly where you left off.
+-- newtype Resumable s i o = Resumable
+--   { unResumable :: SF (s, i) (Resumption s o)
+--   }
+--   deriving stock Functor
 
-runResumable :: s -> Resumable s i o -> Swont i o s
-runResumable s0 (Resumable sf) = swont $ loopPre s0 $
-  proc is -> do
-    Resumption s' o ev <- sf -< swap is
-    returnA -< ((o, s' <$ ev), s')
+-- runResumable :: s -> Resumable s i o -> Swont r i o s
+-- runResumable s0 (Resumable sf) = swont $ loopPre s0 $
+--   proc is -> do
+--     Resumption s' o ev <- sf -< swap is
+--     returnA -< ((o, s' <$ ev), s')
 
 fork :: [SF i o] -> SF i [o]
 fork = par $ \i -> fmap (i, )
