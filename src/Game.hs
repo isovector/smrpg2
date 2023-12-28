@@ -3,11 +3,9 @@
 
 module Game where
 
-import Data.Maybe
 import           Battle.Menu
 import           Battle.TimedHits
 import           Battle.Types
-import           Control.Lens (at, _Just)
 import           Control.Monad.Except
 import           Data.Foldable
 import qualified Data.Map as M
@@ -49,7 +47,7 @@ testTimedHits = runSwont undefined $ fix $ \loop -> do
 
 heroHandler :: ObjSF BattleMessage Void FighterId (Maybe BattleFighter)
 heroHandler = foreverSwont $ do
-  (action, target) <- swont $ proc oi -> do
+  (action, _target) <- swont $ proc oi -> do
     me <- drawMe -< (oi, id)
     let ev = asum $ fmap (Event . snd) $ oie_mailbox (oi_inbox oi) DoAction
     returnA -< (me, ev)
@@ -58,17 +56,19 @@ heroHandler = foreverSwont $ do
       dswont $ proc oi -> do
         (off, done) <- jump -< oi_fi oi
         oo <- drawMe -< (oi, subtract off)
-        returnA -< ( oo
-                        & #oo_commands <>~ [ Spawn (Just Menu) Nothing $ menuObject $ HeroKey Hero1 ]
-                   , done)
+        returnA -< (oo, done)
     Defend -> do
       let dur = 2
       dswont $ proc oi -> do
         end <- after dur () -< ()
-        oo <- drawMe -< (oi, subtract 20)
-        returnA -< ( oo
-                        & #oo_commands <>~ [ Spawn (Just Menu) Nothing $ menuObject $ HeroKey Hero1 ]
-                   , end)
+        oo <- drawMe -< (oi, (+) $ V2 (-20) 20)
+        returnA -< (oo, end)
+  dswont $ proc oi -> do
+    end <- after 0.0016 () -< ()
+    oo <- drawMe -< (oi, id)
+    returnA -< ( oo
+                    & #oo_commands <>~ [ Spawn (Just Menu) Nothing $ menuObject $ HeroKey Hero1 ]
+                , end)
   where
     drawMe = proc (oi, offset) -> do
       returnA -< ObjectOutput
@@ -117,7 +117,7 @@ jump = keeping 0 $ getSwont $ fix $ \loop -> do
 
 testRouter :: SF RawFrameInfo Renderable
 testRouter = proc rfi -> do
-  cc <- router @BattleMessage @Void @FighterId @(Maybe BattleFighter) undefined (\case) $ ObjectMap mempty $ M.fromList
+  cc <- router @BattleMessage @Void @FighterId @(Maybe BattleFighter) undefined (const $ \case) $ ObjectMap mempty $ M.fromList
     [
       (HeroKey Hero1, (Just horton, heroHandler))
     , (HeroKey Hero2, (Just skalp, proc oi -> do

@@ -4,16 +4,14 @@
 module Engine.Main where
 
 import           Control.Monad
-import           Data.Foldable (fold)
 import           Data.IORef
 import           Data.Time.Clock.System
-import           Data.Traversable (for)
 import           Engine.Globals (veryUnsafeEngineIORef)
 import           Engine.Types
 import           Engine.Controls (parseControls)
 -- import           Game.Splash (runIntro)
 import           SDL hiding (Vector, copy, Stereo)
-import qualified Sound.ALUT as ALUT
+-- import qualified Sound.ALUT as ALUT
 import           System.Exit
 import Game
 
