@@ -117,7 +117,13 @@ jump = keeping 0 $ getSwont $ fix $ \loop -> do
 
 testRouter :: SF RawFrameInfo Renderable
 testRouter = proc rfi -> do
-  cc <- router @BattleMessage @Void @FighterId @(Maybe BattleFighter) undefined (const $ \case) $ ObjectMap mempty $ M.fromList
+  cc <- router @BattleMessage
+               @Void
+               @FighterId
+               @(Maybe BattleFighter)
+          undefined
+          (const $ \case)
+      $ ObjectMap mempty $ M.fromList
     [
       (HeroKey Hero1, (Just horton, heroHandler))
     , (HeroKey Hero2, (Just skalp, proc oi -> do
