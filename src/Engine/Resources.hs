@@ -57,10 +57,12 @@ instance Bounded Char' where
   maxBound = Char' $ toEnum 122
 
 
--- frameCounts :: Anim -> Int
--- frameCounts (Idle _)   = 4
--- frameCounts (NoAnim _) = 1
--- frameCounts (Run _)    = 4
+frameCounts :: Anim -> Int
+frameCounts Mario_Battle_Idle = 1
+frameCounts Mario_Battle_Defend = 1
+frameCounts Mario_Battle_JumpUp = 1
+frameCounts Mario_Battle_JumpDown = 1
+frameCounts Mario_Battle_JumpStomp = 1
 
 -- frameSound :: Anim -> Int -> Maybe Sound
 -- frameSound (Run _) 1 = Just StepSound
@@ -77,22 +79,24 @@ wrapTexture t = do
     , wt_origin = 0
     }
 
--- instance IsResource Anim [WrappedTexture] where
---   resourceFolder = "anims"
---   resourceExt = "png"
---   resourceName _ = "unused"
---   load an e _ = do
---     rpath <- resourceRootPath
---     for [0 .. frameCounts an - 1] $ \i -> do
---       let fp = rpath </> "anims" </> animName an <> "_" <> show i <.> "png"
---       wt <- wrapTexture =<< loadJuicyTexture (e_renderer e) fp
---       pure $ setGroundOrigin wt
+instance IsResource Anim [WrappedTexture] where
+  resourceFolder = "sprites/"
+  resourceExt = "png"
+  resourceName _ = "unused"
+  load an e _ = do
+    rpath <- resourceRootPath
+    for [0 .. frameCounts an - 1] $ \i -> do
+      let fp = rpath </> "sprites/" </> animName an <> "_" <> show i <.> "png"
+      wt <- wrapTexture =<< loadJuicyTexture (e_renderer e) fp
+      pure $ setGroundOrigin wt
 
 
--- animName :: Anim -> FilePath
--- animName (Idle s) = charName s </> "idle"
--- animName (NoAnim s) = charName s </> "no_anim"
--- animName (Run s) = charName s </> "run"
+animName :: Anim -> FilePath
+animName Mario_Battle_Idle = "mario/battle-idle"
+animName Mario_Battle_Defend = "mario/battle-defend"
+animName Mario_Battle_JumpUp = "mario/battle-jumpup"
+animName Mario_Battle_JumpDown = "mario/battle-jumpdown"
+animName Mario_Battle_JumpStomp = "mario/battle-jumpstomp"
 
 
 -- charName :: Sprite -> FilePath
@@ -180,7 +184,7 @@ loadResources engine = do
   -- songs    <- loadResource rpath engine
   -- sounds   <- loadResource rpath engine
   -- worlds   <- loadResource rpath engine
-  -- anims    <- loadResource rpath engine
+  anims    <- loadResource rpath engine
   glyphs   <- loadResource rpath engine
 
   pure $ Resources
@@ -189,7 +193,7 @@ loadResources engine = do
     -- , r_sounds   = sounds
     -- , r_songs    = songs
     -- , r_worlds   = worlds
-    , r_anims    = const []
+    , r_anims    = anims
     , r_glyphs   = glyphs . Char'
     }
 

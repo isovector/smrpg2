@@ -20,20 +20,20 @@ global_resources = unsafePerformIO $ loadResources =<< readIORef veryUnsafeEngin
 -- global_sounds :: Sound -> ALUT.Source
 -- global_songs :: Song -> ALUT.Source
 -- global_worlds :: WorldName -> World
--- global_anims :: Anim -> [WrappedTexture]
+global_anims :: Anim -> [WrappedTexture]
 global_glyphs :: Char -> Texture
 
 Resources
   { -- r_textures = global_textures
   -- , r_sounds   = global_sounds
   -- , r_worlds   = global_worlds
-  -- , r_anims    = global_anims
-    r_glyphs   = global_glyphs
+    r_anims    = global_anims
+  , r_glyphs   = global_glyphs
   -- , r_songs    = global_songs
   } = global_resources
 
 
--- {-# NOINLINE global_anims    #-}
+{-# NOINLINE global_anims    #-}
 {-# NOINLINE global_glyphs   #-}
 -- {-# NOINLINE global_songs    #-}
 -- {-# NOINLINE global_sounds   #-}

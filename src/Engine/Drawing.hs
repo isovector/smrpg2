@@ -2,15 +2,15 @@
 
 module Engine.Drawing where
 
-import           Data.Foldable (for_, traverse_)
+import           Data.Foldable (for_)
 import           Engine.FRP
-import           Engine.Geometry (rectContains)
 import           Engine.Globals
+import           Engine.Resources
 import           Engine.Types
 import           Engine.Utils (originRectToRect)
 import           Foreign.C
 import           SDL
-import qualified Sound.ALUT as ALUT
+-- import qualified Sound.ALUT as ALUT
 
 
 drawOriginRect :: Color -> OriginRect Double -> V2 Double -> Renderable
@@ -96,24 +96,24 @@ drawSprite
 drawSprite wt pos theta flips =
   drawSpriteStretched wt pos theta flips 1
 
--- mkAnim :: SF (DrawSpriteDetails, V2 Double) Renderable
--- mkAnim = proc (dsd, pos) -> do
---   let anim = dsd_anim dsd
---   global_tick <- round . (/ 0.1) <$> localTime -< ()
---   new_anim <- onChange -< dsd_anim dsd
---   anim_start <- hold 0 -< global_tick <$ new_anim
+mkAnim :: SF (DrawSpriteDetails, V2 Double) Renderable
+mkAnim = proc (dsd, pos) -> do
+  let anim = dsd_anim dsd
+  global_tick <- round . (/ 0.1) <$> localTime -< ()
+  new_anim <- onChange -< dsd_anim dsd
+  anim_start <- hold 0 -< global_tick <$ new_anim
 
---   let anim_frame = (global_tick - anim_start) `mod` frameCounts anim
---   new_frame <- onChange -< anim_frame
+  let anim_frame = (global_tick - anim_start) `mod` frameCounts anim
+  -- new_frame <- onChange -< anim_frame
 
---   returnA -< \cam -> do
---     for_ new_frame $ traverse_ playSound . frameSound anim
---     drawSprite
---       (global_anims anim !! anim_frame)
---       pos
---       (dsd_rotation dsd)
---       (dsd_flips dsd)
---       cam
+  returnA -< do
+    -- for_ new_frame $ traverse_ playSound . frameSound anim
+    drawSprite
+      (global_anims anim !! anim_frame)
+      pos
+      (dsd_rotation dsd)
+      (dsd_flips dsd)
+
 
 
 atScreenPos :: Renderable -> Renderable
@@ -121,7 +121,7 @@ atScreenPos = id
 
 
 drawText :: Double -> V3 Word8 -> String -> V2 Double -> Renderable
-drawText sz color text pos@(V2 x y)
+drawText sz color text _pos@(V2 x y)
   -- | rectContains screenRect pos
   = do
       let renderer = e_renderer $ r_engine global_resources

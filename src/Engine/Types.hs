@@ -143,8 +143,13 @@ instance Semigroup s => Semigroup (ObjectOutput msg c k s) where
 data GameState = GameState
   deriving (Eq, Ord, Show, Read)
 
-data Anim = Anim
-  deriving (Eq, Ord, Show, Read)
+data Anim
+  = Mario_Battle_Idle
+  | Mario_Battle_Defend
+  | Mario_Battle_JumpUp
+  | Mario_Battle_JumpDown
+  | Mario_Battle_JumpStomp
+  deriving (Eq, Ord, Show, Read, Enum, Bounded)
 
 
 
