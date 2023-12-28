@@ -60,7 +60,7 @@ heroHandler = foreverSwont $ do
     Defend -> do
       let dur = 2
       dswont $ proc oi -> do
-        end <- after dur () -< ()
+        end <- after dur 0 -< ()
         oo <- drawMe -< (oi, (+) $ V2 (-20) 20)
         returnA -< (oo, end)
   dswont $ proc oi -> do
@@ -105,13 +105,13 @@ timedJump = proc i -> do
   hit <- timedHit SpellMenu -< (i, ev)
   returnA -< (p, hit)
 
-jump :: SF RawFrameInfo (V2 Double, Event ())
+jump :: SF RawFrameInfo (V2 Double, Event Int)
 jump = keeping 0 $ getSwont $ fix $ \loop -> do
   jumpUp
   thr <- swont timedJump
   case (thr >= Good) of
-    True  -> loop
-    False -> pure ()
+    True  -> fmap (+ 1) loop
+    False -> pure 0
 
 
 
