@@ -30,6 +30,11 @@ getSwont (runSwont' -> sw) = proc i -> do
 runSwont :: (a -> SF i o) -> Swont r i o a -> SF i o
 runSwont k (runSwont' -> sw) = fmap fst $ runContT sw $ fmap (, NoEvent) . k
 
+runSwontForever :: Swont r i o r -> SF i (o, Event r)
+runSwontForever sw@(Swont c)
+  = runContT c
+  $ \r -> (second (const $ Event r) --> arr (const id)) <*> runSwontForever sw
+
 
 waitFor :: SF a (Event c) -> SF a b -> Swont r a b c
 waitFor ev sf = dswont $ (,) <$> sf <*> ev

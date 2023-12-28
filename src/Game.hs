@@ -59,7 +59,7 @@ heroHandler = foreverSwont $ do
         end <- after dur () -< ()
         oo <- drawMe (-20) -< oi
         returnA -< ( oo
-                        & #oo_commands <>~ [Spawn (Just Menu) undefined $ menuObject $ HeroKey Hero1 ]
+                        & #oo_commands <>~ [ Spawn (Just Menu) Nothing $ menuObject $ HeroKey Hero1 ]
                    , end)
       pure ()
   where
@@ -95,5 +95,7 @@ testRouter = proc rfi -> do
       ))
     , (Menu, (Nothing , menuObject $ HeroKey Hero1))
     ] -< rfi
-  returnA -< foldMap oo_render cc
+  returnA -< mconcat
+    [ foldMap oo_render cc
+    ]
 

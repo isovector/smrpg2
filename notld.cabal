@@ -25,6 +25,9 @@ source-repository head
 
 library
   exposed-modules:
+      Battle.Menu
+      Battle.TimedHits
+      Battle.Types
       Engine.Controls
       Engine.Drawing
       Engine.FRP

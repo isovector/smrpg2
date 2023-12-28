@@ -178,7 +178,6 @@ type Renderable = IO ()
 -- | Things that change every frame.
 data FrameInfo' a = FrameInfo
   { fi_controls :: Controls
-  , fi_dt :: Double
   , fi_ext :: a
   }
   deriving stock (Show, Generic)
@@ -230,15 +229,6 @@ class HasFrameInfo a where
 
 -- instance HasFrameInfo ObjectInput where
 --   frameInfo = oi_frameInfo
-
-class HasDeltaTime a where
-  deltaTime :: a -> Time
-
-instance HasDeltaTime (FrameInfo' a) where
-  deltaTime = fi_dt
-
-instance {-# OVERLAPPABLE #-} HasFrameInfo a => HasDeltaTime a where
-  deltaTime = deltaTime . frameInfo
 
 class HasControls a where
   controls :: a -> Controls
