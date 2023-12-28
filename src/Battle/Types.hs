@@ -60,7 +60,8 @@ data FighterSelection
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 
-data TimedHitResult = Unattempted | Flubbed | Good | Perfect
+data TimedHitResult
+  = Flubbed | Unattempted | Good | Perfect
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 data HeroKey
@@ -72,6 +73,7 @@ data HeroKey
 
 data FighterId
   = HeroKey HeroKey
+  | EnemyKey
   | Menu
   deriving (Eq, Ord, Show)
 

@@ -50,6 +50,13 @@ timed dur sf = waitFor (after dur ()) sf
 lerpSF :: Double -> SF Double b -> Swont r a b ()
 lerpSF dur sf = timed dur $ localTime >>> arr (/ dur) >>> sf
 
+keeping :: o -> SF i (Either o e) -> SF i (o, Event e)
+keeping o0 sf = proc i -> do
+  x <- sf -< i
+  e <- once -< either (const NoEvent) Event x
+  o <- hold o0 -< either Event (const NoEvent) x
+  returnA -< (o, e)
+
 
 timedSequence
     :: SF i o    -- ^ final result

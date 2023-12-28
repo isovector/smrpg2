@@ -115,6 +115,7 @@ needsSelection (UseItem Item_TestItem) = SelectHero
 needsSelection (UseSpell Spell_TestSpell) = SelectEnemy
 
 toPredicate :: FighterSelection -> FighterId -> Bool
+toPredicate SelectEnemy EnemyKey = True
 toPredicate SelectEnemy _ = False
 toPredicate SelectHero (HeroKey _) = True
 toPredicate SelectHero _ = False
