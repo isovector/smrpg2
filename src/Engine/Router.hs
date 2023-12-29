@@ -46,7 +46,7 @@ decodeCommand
     -> k
     -> Command msg c k s
     -> Endo (ObjectMap msg k s (ObjSF msg c k s))
-decodeCommand _ _ from Die = Endo $ #objm_map %~ M.delete from
+decodeCommand _ _ from Unspawn = Endo $ #objm_map %~ M.delete from
 decodeCommand gen _ _ (Spawn k s obj) = Endo $ #objm_map %~ \oo -> M.insert (fromMaybe (gen oo) k) (s, obj) oo
 decodeCommand _ _ from (Broadcast msg)
   = Endo $ \objm -> flip appEndo objm

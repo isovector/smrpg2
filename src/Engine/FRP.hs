@@ -47,8 +47,10 @@ timed :: Double -> SF a b -> Swont r a b ()
 timed dur sf = waitFor (after dur ()) sf
 
 
-lerpSF :: Double -> SF Double b -> Swont r a b ()
-lerpSF dur sf = timed dur $ localTime >>> arr (/ dur) >>> sf
+lerpSF :: Double -> SF (Double, a) b -> Swont r a b ()
+lerpSF dur sf = timed dur $ proc i -> do
+  t <- localTime -< ()
+  sf -< (t / dur, i)
 
 keeping :: o -> SF i (Either o e) -> SF i (o, Event e)
 keeping o0 sf = proc i -> do

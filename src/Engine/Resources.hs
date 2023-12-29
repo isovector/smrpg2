@@ -5,20 +5,22 @@
 
 module Engine.Resources where
 
+import           Control.Lens ((%~))
 import           Control.Monad ((<=<))
+import qualified Data.Map as M
+import           Data.Traversable (for)
 import           Data.Traversable (for)
 import           Engine.Types
+import           Engine.Types (Engine)
 import           Engine.Utils (setGroundOrigin)
+import           Foreign.C (CInt)
 import           SDL (Texture, textureWidth, textureHeight)
 import           SDL.JuicyPixels (loadJuicyTexture)
 import           SDL.Video (queryTexture)
 import qualified Sound.ALUT as ALUT
-import           System.FilePath ((</>), (<.>))
-import qualified Data.Map as M
-import           Data.Traversable (for)
-import           Engine.Types (Engine)
 import           System.Environment.Blank (getEnv)
 import           System.FilePath
+import           System.FilePath ((</>), (<.>))
 
 
 class (Ord key, Bounded key, Enum key)
@@ -79,6 +81,9 @@ wrapTexture t = do
     , wt_origin = 0
     }
 
+scaleWrapped :: Float -> WrappedTexture -> WrappedTexture
+scaleWrapped sc = #wt_size %~ fmap (round . (* sc) . fromIntegral)
+
 instance IsResource Anim [WrappedTexture] where
   resourceFolder = "sprites/"
   resourceExt = "png"
@@ -88,7 +93,7 @@ instance IsResource Anim [WrappedTexture] where
     for [0 .. frameCounts an - 1] $ \i -> do
       let fp = rpath </> "sprites/" </> animName an <> "_" <> show i <.> "png"
       wt <- wrapTexture =<< loadJuicyTexture (e_renderer e) fp
-      pure $ setGroundOrigin wt
+      pure $ setGroundOrigin $ scaleWrapped 1.5 wt
 
 
 animName :: Anim -> FilePath

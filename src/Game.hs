@@ -9,6 +9,7 @@ import           Battle.Types
 import           Control.Monad.Except
 import           Data.Foldable
 import qualified Data.Map as M
+import           Data.Maybe (fromJust)
 import           Data.Void
 import           Engine.Drawing
 import           Engine.Router
@@ -45,59 +46,92 @@ testTimedHits = runSwont undefined $ fix $ \loop -> do
   loop
 
 
-heroHandler :: ObjSF BattleMessage Void FighterId (Maybe BattleFighter)
+lerpBetween
+    :: Ord k
+    => Time
+    -> V2 Double
+    -> V2 Double
+    -> Anim
+    -> Swont r (ObjectInput msg k STATE)
+               (ObjectOutput msg c k STATE)
+               ()
+lerpBetween dur start end anim =
+  lerpSF dur $ proc (t, oi) -> do
+    oo <- actuallyDraw -< (start * (pure $ 1 - t) + end * pure t, anim)
+    returnA -< hoistOO oo oi
+
+actuallyDraw :: SF (V2 Double, Anim) Renderable
+actuallyDraw = proc (pos, anim) -> do
+  mkAnim -< (DrawSpriteDetails anim 0 $ pure False, pos)
+
+hoistOO :: Ord k => Renderable -> ObjectInput msg k STATE -> ObjectOutput msg c k STATE
+hoistOO out oi =
+  ObjectOutput
+    { oo_state = oi_state oi
+    , oo_commands = mempty
+    , oo_outbox = mempty
+    , oo_render =
+        mconcat
+          [ drawFilledRect (V4 0 0 0 128)
+            $ Rectangle (P $ bp_pos $ oi_state' oi) 10
+          , out
+          ]
+    }
+
+drawMe :: SF (OI, Anim, V2 Double -> V2 Double) OO
+drawMe = proc (oi, anim, offset) -> do
+  out <- actuallyDraw -< (offset (bp_pos $ oi_state' oi), anim)
+  returnA -< hoistOO out oi
+
+heroHandler :: SF OI OO
 heroHandler = foreverSwont $ do
-  (action, _target) <- swont $ proc oi -> do
+  ((action, target0), oi0) <- swont $ proc oi -> do
     me <- drawMe -< (oi, Mario_Battle_Idle, id)
     let ev = asum $ fmap (Event . snd) $ oie_mailbox (oi_inbox oi) DoAction
-    returnA -< (me, ev)
-  case action of
+    returnA -< (me, fmap (, oi) ev)
+  AttackResult msgs cmds <- case action of
     UseSpell Spell_TestSpell -> do
-      dswont $ proc oi -> do
+      let target = fromJust target0
+      let tpos  = bp_pos $ fromJust $ oi_everyone oi0 M.! target
+          pos = bp_pos $ fromJust $ oi_state oi0
+          halfway = (pos + (tpos - pos) / 2)
+      lerpBetween 0.25 pos halfway Mario_Battle_Idle
+      lerpBetween 0.15 halfway (halfway - V2 0 jumpSize) Mario_Battle_JumpUp
+      num_jumps <- dswont $ proc oi -> do
         ((off, anim), done) <- jump -< oi_fi oi
-        oo <- drawMe -< (oi, anim, subtract off)
+        oo <- drawMe -< (oi, anim, const $ tpos - off)
         returnA -< (oo, done)
+      lerpBetween 0.3 tpos pos Mario_Battle_Idle
+      pure $ mempty { ar_messages = pure (target, SomeMsg DoDamage $ num_jumps * 10) }
     Defend -> do
       let dur = 2
       dswont $ proc oi -> do
-        end <- after dur 0 -< ()
+        end <- after dur mempty -< ()
         oo <- drawMe -< (oi, Mario_Battle_Defend, id)
         returnA -< (oo, end)
   dswont $ proc oi -> do
     end <- after 0.0016 () -< ()
     oo <- drawMe -< (oi, Mario_Battle_Idle, id)
     returnA -< ( oo
-                    & #oo_commands <>~ [ Spawn (Just Menu) Nothing $ menuObject $ HeroKey Hero1 ]
+                    & #oo_outbox   <>~ msgs
+                    & #oo_commands <>~ (Spawn (Just Menu) Nothing $ menuObject $ HeroKey Hero1)
+                                     : cmds
                 , end)
-  where
-    drawMe = proc (oi, anim, offset) -> do
-      out <- mkAnim -< (DrawSpriteDetails anim 0 $ pure False, offset (bp_pos $ oi_state' oi))
-      returnA -< ObjectOutput
-        { oo_state = oi_state oi
-        , oo_commands = mempty
-        , oo_outbox = mempty
-        , oo_render =
-            mconcat
-              [ drawFilledRect (V4 0 0 0 128)
-                $ Rectangle (P $ bp_pos $ oi_state' oi) 10
-              , out
-              ]
-        }
 
 
 game :: SF RawFrameInfo Renderable
 game = testRouter
 
 jumpSize :: Num a => a
-jumpSize = 100
+jumpSize = 200
 
 jumpUp :: Swont r a (V2 Double, Anim) ()
-jumpUp = lerpSF 0.1 $ arr $ \t -> (V2 0 (jumpSize * t), Mario_Battle_JumpUp)
+jumpUp = lerpSF 0.1 $ arr $ \(t, _) -> (V2 0 (jumpSize * t), Mario_Battle_JumpUp)
 
 jumpDown :: Swont r a (V2 Double, Anim) ()
 jumpDown = do
   timed 0.5 $ constant $ (V2 0 jumpSize, Mario_Battle_JumpUp)
-  lerpSF 0.1 $ arr $ \t -> (V2 0 (jumpSize * (1 - t)), Mario_Battle_JumpDown)
+  lerpSF 0.1 $ arr $ \(t, _) -> (V2 0 (jumpSize * (1 - t)), Mario_Battle_JumpDown)
 
 timedJump :: SF RawFrameInfo ((V2 Double, Anim), Event TimedHitResult)
 timedJump = proc i -> do
@@ -107,10 +141,9 @@ timedJump = proc i -> do
 
 jump :: SF RawFrameInfo ((V2 Double, Anim), Event Int)
 jump = keeping (0, Mario_Battle_JumpStomp) $ getSwont $ fix $ \loop -> do
-  jumpUp
   thr <- swont timedJump
   case (thr >= Good) of
-    True  -> fmap (+ 1) loop
+    True  -> jumpUp >> fmap (+ 1) loop
     False -> pure 0
 
 

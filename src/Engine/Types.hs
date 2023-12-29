@@ -86,7 +86,7 @@ data Message a where
 type ObjSF msg c k s = SF (ObjectInput msg k s) (ObjectOutput msg c k s)
 
 data Command msg c k s
-  = Die
+  = Unspawn
   | Spawn (Maybe k) ~s (ObjSF msg c k s)
   | Broadcast (SomeMsg msg)
   | OtherCommand c

@@ -6,9 +6,19 @@ module Battle.Types where
 import Data.Map (Map)
 import Engine.Types
 import Data.Maybe
+import Data.Void
 
+type MSG = BattleMessage
+type KEY = FighterId
+type STATE = Maybe BattleFighter
+type CMD = Void
 
-type BattleState = Map FighterId (Maybe BattleFighter)
+type COMMAND = Command MSG CMD KEY STATE
+
+type OI = ObjectInput MSG KEY STATE
+type OO = ObjectOutput MSG CMD KEY STATE
+
+type BattleState = Map FighterId STATE
 
 data BattleMenu = AttackMenu | DefendMenu | ItemMenu | SpellMenu
   deriving (Eq, Ord, Show, Enum, Bounded)
@@ -78,10 +88,30 @@ data FighterId
   deriving (Eq, Ord, Show)
 
 data BattleMessage a where
-  DoAction :: BattleMessage (BattleAction, Maybe FighterId)
+  DoAction       :: BattleMessage (BattleAction, Maybe KEY)
+  DoDamage       :: BattleMessage Int
+  DoHealing      :: BattleMessage Int
+  DoMortalDamage :: BattleMessage ()
 
-deriving instance Eq (BattleMessage a)
+deriving instance Eq   (BattleMessage a)
+deriving instance Ord  (BattleMessage a)
+deriving instance Show (BattleMessage a)
+
+data AttackResult = AttackResult
+  { ar_messages :: [(FighterId, SomeMsg MSG)]
+  , ar_commands :: [COMMAND]
+  }
+
+instance Semigroup AttackResult where
+  AttackResult a1 a2 <> AttackResult b1 b2
+    = AttackResult
+        (a1 <> b1)
+        (a2 <> b2)
+
+instance Monoid AttackResult where
+  mempty = AttackResult mempty mempty
 
 oi_state' :: Ord k => ObjectInput msg k (Maybe s) -> s
 oi_state' = fromJust . oi_state
+
 

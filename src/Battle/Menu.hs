@@ -156,7 +156,7 @@ menuObject owner =
             }
         Right r ->
           ObjectOutput
-            { oo_commands = pure Die
+            { oo_commands = pure Unspawn
             , oo_outbox = [(owner, SomeMsg DoAction r)]
             , oo_state = Nothing
             , oo_render = mempty
