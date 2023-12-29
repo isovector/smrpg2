@@ -10,10 +10,9 @@ import           Control.Monad.Except
 import           Data.Foldable
 import qualified Data.Map as M
 import           Data.Maybe (fromJust)
-import           Data.Void
 import           Engine.Drawing
-import           Engine.Router
 import           Engine.Types
+import           Game.FRP
 
 
 horton :: BattleFighter
@@ -46,41 +45,9 @@ testTimedHits = runSwont undefined $ fix $ \loop -> do
   loop
 
 
-lerpBetween
-    :: Ord k
-    => Time
-    -> V2 Double
-    -> V2 Double
-    -> Anim
-    -> Swont r (ObjectInput msg k STATE)
-               (ObjectOutput msg c k STATE)
-               ()
-lerpBetween dur start end anim =
-  lerpSF dur $ proc (t, oi) -> do
-    oo <- actuallyDraw -< (start * (pure $ 1 - t) + end * pure t, anim)
-    returnA -< hoistOO oo oi
-
-actuallyDraw :: SF (V2 Double, Anim) Renderable
-actuallyDraw = proc (pos, anim) -> do
-  mkAnim -< (DrawSpriteDetails anim 0 $ pure False, pos)
-
-hoistOO :: Ord k => Renderable -> ObjectInput msg k STATE -> ObjectOutput msg c k STATE
-hoistOO out oi =
-  ObjectOutput
-    { oo_state = oi_state oi
-    , oo_commands = mempty
-    , oo_outbox = mempty
-    , oo_render =
-        mconcat
-          [ drawFilledRect (V4 0 0 0 128)
-            $ Rectangle (P $ bp_pos $ oi_state' oi) 10
-          , out
-          ]
-    }
-
 drawMe :: SF (OI, Anim, V2 Double -> V2 Double) OO
 drawMe = proc (oi, anim, offset) -> do
-  out <- actuallyDraw -< (offset (bp_pos $ oi_state' oi), anim)
+  out <- drawSimpleSprite -< (offset (bp_pos $ oi_state' oi), anim)
   returnA -< hoistOO out oi
 
 heroHandler :: SF OI OO
@@ -95,13 +62,13 @@ heroHandler = foreverSwont $ do
       let tpos  = bp_pos $ fromJust $ oi_everyone oi0 M.! target
           pos = bp_pos $ fromJust $ oi_state oi0
           halfway = (pos + (tpos - pos) / 2)
-      lerpBetween 0.25 pos halfway Mario_Battle_Idle
-      lerpBetween 0.15 halfway (halfway - V2 0 jumpSize) Mario_Battle_JumpUp
+      spriteLerp 0.25 pos halfway Mario_Battle_Idle
+      spriteLerp 0.15 halfway (halfway - V2 0 jumpSize) Mario_Battle_JumpUp
       num_jumps <- dswont $ proc oi -> do
         ((off, anim), done) <- jump -< oi_fi oi
         oo <- drawMe -< (oi, anim, const $ tpos - off)
         returnA -< (oo, done)
-      lerpBetween 0.3 tpos pos Mario_Battle_Idle
+      spriteLerp 0.3 tpos pos Mario_Battle_Idle
       pure $ mempty { ar_messages = pure (target, SomeMsg DoDamage $ num_jumps * 10) }
     Defend -> do
       let dur = 2
@@ -150,12 +117,7 @@ jump = keeping (0, Mario_Battle_JumpStomp) $ getSwont $ fix $ \loop -> do
 
 testRouter :: SF RawFrameInfo Renderable
 testRouter = proc rfi -> do
-  cc <- router @BattleMessage
-               @Void
-               @FighterId
-               @(Maybe BattleFighter)
-          undefined
-          (const $ \case)
+  cc <- battleRouter undefined (const $ \case)
       $ ObjectMap mempty $ M.fromList
     [
       (HeroKey Hero1, (Just horton, heroHandler))

@@ -4,9 +4,11 @@
 module Battle.Types where
 
 import Data.Map (Map)
-import Engine.Types
 import Data.Maybe
+import Data.Monoid
 import Data.Void
+import Engine.Router
+import Engine.Types
 
 type MSG = BattleMessage
 type KEY = FighterId
@@ -114,4 +116,15 @@ instance Monoid AttackResult where
 oi_state' :: Ord k => ObjectInput msg k (Maybe s) -> s
 oi_state' = fromJust . oi_state
 
+
+battleRouter
+  :: (forall x. Map KEY x -> KEY)
+  -> (KEY -> CMD -> Endo (ObjectMap MSG KEY STATE (SF OI OO)))
+  -> ObjectMap MSG KEY STATE (SF OI OO)
+  -> SF RawFrameInfo (ObjectMap MSG KEY STATE OO)
+battleRouter =
+  router @MSG
+         @CMD
+         @KEY
+         @STATE
 
