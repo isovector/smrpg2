@@ -1,5 +1,6 @@
-{-# LANGUAGE StrictData           #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE StrictData            #-}
+{-# LANGUAGE UndecidableInstances  #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -fno-warn-duplicate-exports #-}
@@ -70,7 +71,14 @@ data SomeMsg msg where
 instance Eq (SomeMsg msg) where
   _ == _ = False
 
+instance (forall a. Show (msg a)) => Show (SomeMsg msg) where
+  show (SomeMsg msg _) = "(SomeMsg (" <> show msg <> "))"
 
+instance Show Renderable where
+  show _ = "<Renderable>"
+
+instance Show (SF i o) where
+  show _ = "<SF>"
 
 
 type ObjectMap :: (Type -> Type) -> Type -> Type -> Type -> Type
@@ -87,10 +95,12 @@ type ObjSF msg c k s = SF (ObjectInput msg k s) (ObjectOutput msg c k s)
 
 data Command msg c k s
   = Unspawn
-  | Spawn (Maybe k) ~s (ObjSF msg c k s)
+  | Spawn (Maybe k) s (ObjSF msg c k s)
   | Broadcast (SomeMsg msg)
   | OtherCommand c
   deriving stock (Generic)
+
+deriving instance (forall a. Show (msg a), Show k, Show s, Show c) => Show (Command msg c k s)
 
 type ObjectInEvents :: (Type -> Type) -> Type -> Type
 data ObjectInEvents msg k = ObjectInEvents
@@ -124,9 +134,11 @@ data ObjectOutput msg c k s = ObjectOutput
   { oo_outbox   :: [(k, SomeMsg msg)]
   , oo_commands :: [Command msg c k s]
   , oo_render   :: Renderable
-  , oo_state    :: ~s
+  , oo_state    :: s
   }
   deriving stock (Generic)
+
+deriving instance (forall a. Show (msg a), Show k, Show s, Show c) => Show (ObjectOutput msg c k s)
 
 instance Semigroup s => Semigroup (ObjectOutput msg c k s) where
   ObjectOutput a1 a2 a3 a4 <> ObjectOutput b1 b2 b3 b4 =

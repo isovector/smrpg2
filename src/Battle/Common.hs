@@ -20,3 +20,6 @@ drawMe = proc (oi, anim, offset) -> do
   returnA -< hoistOO out oi
 
 
+isAlive :: OI -> Bool
+isAlive = maybe False (> 0) . fmap bp_hp . oi_state
+

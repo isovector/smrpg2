@@ -24,7 +24,7 @@ skalp = BattleFighter "Skalp" 100 HeroTeam (V4 255 255 255 255) 400
 
 
 baddie :: BattleFighter
-baddie = BattleFighter "Baddie" 100 EnemyTeam (V4 0 0 0 255) $ V2 500 200
+baddie = BattleFighter "Baddie" 20 EnemyTeam (V4 0 0 0 255) $ V2 500 200
 
 
 heroHandler :: SF OI OO
@@ -83,10 +83,14 @@ testRouter = proc rfi -> do
       ))
     , (EnemyKey, (Just baddie, proc oi -> do
         let col = V4 128 0 128 255
+            pos = bp_pos $ fromJust $ oi_state oi
         handle_dmg <- damageHandler -< oi
         returnA -< handle_dmg $ ObjectOutput
-          { oo_render = drawFilledRect col
-            $ Rectangle (P $ V2 500 200) 10
+          { oo_render =
+              case isAlive oi of
+                True -> drawFilledRect col
+                      $ Rectangle (P pos) 10
+                False -> drawText 15 (V3 128 0 128) "X" pos
           , oo_state = oi_state oi
           , oo_outbox = mempty
           , oo_commands = mempty
@@ -99,8 +103,11 @@ testRouter = proc rfi -> do
     ]
 
 
+damageIndicatorTime :: Time
+damageIndicatorTime = 0.8
+
 damageIndicator :: V2 Double -> Int -> SF OI OO
-damageIndicator pos0 dmg = let dur = 2 in proc _ -> do
+damageIndicator pos0 dmg = let dur = damageIndicatorTime in proc _ -> do
   t   <- localTime -< ()
   die <- after dur () -< ()
   let pos = pos0 - (V2 0 50) * pure (min 1 (2 * t / dur))
@@ -129,7 +136,9 @@ damageHandler = proc oi -> do
       dmg = sum raw_dmg
       pos = bp_pos $ fromJust $ oi_state oi
 
-  returnA -< (#oo_state . _Just . #bp_hp -~ dmg)
+  recv_dmg <- delayEvent damageIndicatorTime -< bool NoEvent (Event dmg) has_dmg
+
+  returnA -< (#oo_state . _Just . #bp_hp -~ event 0 id recv_dmg)
            . (#oo_commands <>~ [ Spawn Nothing Nothing $ damageIndicator pos dmg
                                | has_dmg
                                ])

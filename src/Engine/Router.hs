@@ -4,9 +4,9 @@
 
 module Engine.Router where
 
-import           Control.Lens (at, non)
+import           Control.Lens (at, non, _Just, _1)
 import           Control.Monad
-import qualified Data.Map as M
+import qualified Data.Map.Strict as M
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Typeable
@@ -88,7 +88,8 @@ router gen other st =
         $ flip foldMap (M.toList $ objm_map om)
         $ \(k, (_, oo)) ->
             pure $ mconcat
-              [ flip foldMap (oo_outbox oo) $ uncurry (send k)
+              [ Endo $ #objm_map . at k . _Just . _1 .~ oo_state oo
+              , flip foldMap (oo_outbox oo)   $ uncurry (send k)
               , flip foldMap (oo_commands oo) $ decodeCommand gen other k
               ]
           )
