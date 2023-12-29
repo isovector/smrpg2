@@ -3,12 +3,16 @@
 
 module Game where
 
+import Data.Ord
 import           Battle.Common
 import           Battle.Menu
 import           Battle.Scripts.Jump
+import           Control.Lens (_Just)
 import           Data.Foldable
+import           Data.List
 import qualified Data.Map as M
-import           Data.Maybe (fromJust)
+import           Data.Maybe (fromJust, mapMaybe, listToMaybe)
+import           Data.Typeable
 
 
 horton :: BattleFighter
@@ -57,7 +61,13 @@ game = testRouter
 
 testRouter :: SF RawFrameInfo Renderable
 testRouter = proc rfi -> do
-  cc <- battleRouter undefined (const $ \case)
+  cc <- battleRouter (Ephemeral
+                        . maybe 0 (+ 1)
+                        . listToMaybe
+                        . sortOn Down
+                        . mapMaybe (preview #_Ephemeral)
+                        . M.keys
+                     ) (const $ \case)
       $ ObjectMap mempty $ M.fromList
     [
       (HeroKey Hero1, (Just horton, heroHandler))
@@ -73,7 +83,8 @@ testRouter = proc rfi -> do
       ))
     , (EnemyKey, (Just baddie, proc oi -> do
         let col = V4 128 0 128 255
-        returnA -< ObjectOutput
+        handle_dmg <- damageHandler -< oi
+        returnA -< handle_dmg $ ObjectOutput
           { oo_render = drawFilledRect col
             $ Rectangle (P $ V2 500 200) 10
           , oo_state = oi_state oi
@@ -86,4 +97,40 @@ testRouter = proc rfi -> do
   returnA -< mconcat
     [ foldMap oo_render cc
     ]
+
+
+damageIndicator :: V2 Double -> Int -> SF OI OO
+damageIndicator pos0 dmg = let dur = 2 in proc _ -> do
+  t   <- localTime -< ()
+  die <- after dur () -< ()
+  let pos = pos0 - (V2 0 50) * pure (min 1 (2 * t / dur))
+  let dmg_s = show dmg
+
+  returnA -< ObjectOutput
+    { oo_render   = mconcat
+        [ drawFilledRect (V4 0 0 0 128) (Rectangle (P pos)
+            $ V2 (fromIntegral $ length dmg_s * 10) 10)
+        , drawText 10 (V3 255 0 0) dmg_s pos
+        ]
+    , oo_state    = Nothing
+    , oo_outbox   = mempty
+    , oo_commands = [ Unspawn
+                    | Event _ <- pure die
+                    ]
+    }
+
+damageHandler :: SF OI (OO -> OO)
+damageHandler = proc oi -> do
+  let mailbox :: Typeable v => BattleMessage v -> [(KEY, v)]
+      mailbox = oie_mailbox $ oi_inbox oi
+
+      raw_dmg = fmap snd $ mailbox DoDamage
+      has_dmg = not $ null raw_dmg
+      dmg = sum raw_dmg
+      pos = bp_pos $ fromJust $ oi_state oi
+
+  returnA -< (#oo_state . _Just . #bp_hp -~ dmg)
+           . (#oo_commands <>~ [ Spawn Nothing Nothing $ damageIndicator pos dmg
+                               | has_dmg
+                               ])
 

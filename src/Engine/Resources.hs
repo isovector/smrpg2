@@ -5,22 +5,17 @@
 
 module Engine.Resources where
 
-import           Control.Lens ((%~))
 import           Control.Monad ((<=<))
 import qualified Data.Map as M
 import           Data.Traversable (for)
-import           Data.Traversable (for)
 import           Engine.Types
-import           Engine.Types (Engine)
 import           Engine.Utils (setGroundOrigin)
-import           Foreign.C (CInt)
 import           SDL (Texture, textureWidth, textureHeight)
 import           SDL.JuicyPixels (loadJuicyTexture)
 import           SDL.Video (queryTexture)
-import qualified Sound.ALUT as ALUT
+-- import qualified Sound.ALUT as ALUT
 import           System.Environment.Blank (getEnv)
 import           System.FilePath
-import           System.FilePath ((</>), (<.>))
 
 
 class (Ord key, Bounded key, Enum key)

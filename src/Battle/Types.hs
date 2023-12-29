@@ -69,25 +69,26 @@ data FighterSelection
   | SelectEnemy
   | SelectAnyone
   | NoSelection
-  deriving (Eq, Ord, Show, Enum, Bounded)
+  deriving (Eq, Ord, Show, Enum, Bounded, Generic)
 
 
 data TimedHitResult
   = Flubbed | Unattempted | Good | Perfect
-  deriving (Eq, Ord, Show, Enum, Bounded)
+  deriving (Eq, Ord, Show, Enum, Bounded, Generic)
 
 data HeroKey
   = Hero1
   | Hero2
   | Hero3
   | Hero4
-  deriving (Eq, Ord, Show, Enum, Bounded)
+  deriving (Eq, Ord, Show, Enum, Bounded, Generic)
 
 data FighterId
   = HeroKey HeroKey
   | EnemyKey
   | Menu
-  deriving (Eq, Ord, Show)
+  | Ephemeral Int
+  deriving (Eq, Ord, Show, Generic)
 
 data BattleMessage a where
   DoAction       :: BattleMessage (BattleAction, Maybe KEY)
