@@ -12,6 +12,7 @@ import Battle.Types
 import Engine.Drawing
 import Engine.Types
 import Game.FRP
+import Data.Typeable
 
 
 drawMe :: SF (OI, Anim, V2 Double -> V2 Double) OO
@@ -22,4 +23,8 @@ drawMe = proc (oi, anim, offset) -> do
 
 isAlive :: OI -> Bool
 isAlive = maybe False (> 0) . fmap bp_hp . oi_state
+
+
+inbox :: Typeable v => OI -> BattleMessage v -> [(KEY, v)]
+inbox = oie_mailbox . oi_inbox
 
