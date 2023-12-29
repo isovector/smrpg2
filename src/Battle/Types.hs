@@ -128,3 +128,5 @@ battleRouter =
          @KEY
          @STATE
 
+type BattleScript = forall r. Swont r OI OO AttackResult
+

@@ -3,16 +3,12 @@
 
 module Game where
 
+import           Battle.Common
 import           Battle.Menu
-import           Battle.TimedHits
-import           Battle.Types
-import           Control.Monad.Except
+import           Battle.Scripts.Jump
 import           Data.Foldable
 import qualified Data.Map as M
 import           Data.Maybe (fromJust)
-import           Engine.Drawing
-import           Engine.Types
-import           Game.FRP
 
 
 horton :: BattleFighter
@@ -27,29 +23,6 @@ baddie :: BattleFighter
 baddie = BattleFighter "Baddie" 100 EnemyTeam (V4 0 0 0 255) $ V2 500 200
 
 
-testTimedHits :: SF RawFrameInfo Renderable
-testTimedHits = runSwont undefined $ fix $ \loop -> do
-  timed 2 $ proc rfi -> do
-    ev <- after 1 () -< ()
-    thr' <- timedHit DefendMenu -< (rfi, ev)
-    thr <- once -< thr'
-    res <- hold Nothing -< fmap Just thr
-    returnA -<
-      case (ev, res) of
-        (Event _, _) -> drawBackgroundColor $ V4 0 0 0 255
-        (_, Nothing) -> mempty
-        (_, Just Perfect) -> drawBackgroundColor $ V4 0 255 0 255
-        (_, Just Good) -> drawBackgroundColor $ V4 255 255 0 255
-        (_, Just Flubbed) -> drawBackgroundColor $ V4 255 0 0 255
-        (_, Just Unattempted) -> drawBackgroundColor $ V4 255 0 255 255
-  loop
-
-
-drawMe :: SF (OI, Anim, V2 Double -> V2 Double) OO
-drawMe = proc (oi, anim, offset) -> do
-  out <- drawSimpleSprite -< (offset (bp_pos $ oi_state' oi), anim)
-  returnA -< hoistOO out oi
-
 heroHandler :: SF OI OO
 heroHandler = foreverSwont $ do
   ((action, target0), oi0) <- swont $ proc oi -> do
@@ -57,19 +30,11 @@ heroHandler = foreverSwont $ do
     let ev = asum $ fmap (Event . snd) $ oie_mailbox (oi_inbox oi) DoAction
     returnA -< (me, fmap (, oi) ev)
   AttackResult msgs cmds <- case action of
-    UseSpell Spell_TestSpell -> do
-      let target = fromJust target0
-      let tpos  = bp_pos $ fromJust $ oi_everyone oi0 M.! target
-          pos = bp_pos $ fromJust $ oi_state oi0
-          halfway = (pos + (tpos - pos) / 2)
-      spriteLerp 0.25 pos halfway Mario_Battle_Idle
-      spriteLerp 0.15 halfway (halfway - V2 0 jumpSize) Mario_Battle_JumpUp
-      num_jumps <- dswont $ proc oi -> do
-        ((off, anim), done) <- jump -< oi_fi oi
-        oo <- drawMe -< (oi, anim, const $ tpos - off)
-        returnA -< (oo, done)
-      spriteLerp 0.3 tpos pos Mario_Battle_Idle
-      pure $ mempty { ar_messages = pure (target, SomeMsg DoDamage $ num_jumps * 10) }
+    UseSpell Spell_TestSpell ->
+      jumpScript
+        (oi_everyone oi0)
+        (bp_pos $ fromJust $ oi_state oi0)
+        (fromJust target0)
     Defend -> do
       let dur = 2
       dswont $ proc oi -> do
@@ -88,31 +53,6 @@ heroHandler = foreverSwont $ do
 
 game :: SF RawFrameInfo Renderable
 game = testRouter
-
-jumpSize :: Num a => a
-jumpSize = 200
-
-jumpUp :: Swont r a (V2 Double, Anim) ()
-jumpUp = lerpSF 0.1 $ arr $ \(t, _) -> (V2 0 (jumpSize * t), Mario_Battle_JumpUp)
-
-jumpDown :: Swont r a (V2 Double, Anim) ()
-jumpDown = do
-  timed 0.5 $ constant $ (V2 0 jumpSize, Mario_Battle_JumpUp)
-  lerpSF 0.1 $ arr $ \(t, _) -> (V2 0 (jumpSize * (1 - t)), Mario_Battle_JumpDown)
-
-timedJump :: SF RawFrameInfo ((V2 Double, Anim), Event TimedHitResult)
-timedJump = proc i -> do
-  (p, ev) <- keeping (0, Mario_Battle_JumpStomp) $ getSwont jumpDown -< i
-  hit <- timedHit SpellMenu -< (i, ev)
-  returnA -< (p, hit)
-
-jump :: SF RawFrameInfo ((V2 Double, Anim), Event Int)
-jump = keeping (0, Mario_Battle_JumpStomp) $ getSwont $ fix $ \loop -> do
-  thr <- swont timedJump
-  case (thr >= Good) of
-    True  -> jumpUp >> fmap (+ 1) loop
-    False -> pure 0
-
 
 
 testRouter :: SF RawFrameInfo Renderable
