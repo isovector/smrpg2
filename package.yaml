@@ -34,6 +34,7 @@ dependencies:
 - ALUT
 - filepath
 - vector
+- linear
 
 default-extensions:
 - Arrows

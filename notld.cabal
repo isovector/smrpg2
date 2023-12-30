@@ -25,9 +25,13 @@ source-repository head
 
 library
   exposed-modules:
+      Battle.Common
+      Battle.Damage
       Battle.Menu
+      Battle.Scripts.Jump
       Battle.TimedHits
       Battle.Types
+      Data.OctTree.Geometry
       Engine.Controls
       Engine.Drawing
       Engine.FRP
@@ -39,6 +43,7 @@ library
       Engine.Types
       Engine.Utils
       Game
+      Game.FRP
       SDL.JuicyPixels
   other-modules:
       Paths_notld
@@ -110,6 +115,7 @@ library
     , generic-lens >=2.2.1.0
     , ldtk-types
     , lens
+    , linear
     , mtl
     , sdl2
     , text
@@ -189,6 +195,7 @@ executable notld-exe
     , generic-lens >=2.2.1.0
     , ldtk-types
     , lens
+    , linear
     , mtl
     , notld
     , sdl2
