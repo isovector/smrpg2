@@ -1,21 +1,24 @@
-{-# LANGUAGE AllowAmbiguousTypes   #-}
-{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE AllowAmbiguousTypes                 #-}
+{-# LANGUAGE FunctionalDependencies              #-}
 
-{-# OPTIONS_GHC -Wno-orphans        #-}
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Engine.Resources where
 
+import Data.Semigroup
 import           Control.Monad ((<=<))
 import qualified Data.Map as M
+import           Data.OctTree
 import           Data.Traversable (for)
 import           Engine.Types
 import           Engine.Utils (setGroundOrigin)
 import           SDL (Texture, textureWidth, textureHeight)
 import           SDL.JuicyPixels (loadJuicyTexture)
 import           SDL.Video (queryTexture)
--- import qualified Sound.ALUT as ALUT
 import           System.Environment.Blank (getEnv)
 import           System.FilePath
+-- import qualified Sound.ALUT as ALUT
 
 
 class (Ord key, Bounded key, Enum key)
@@ -175,6 +178,24 @@ pad n c s =
 --   resourceName ThudSound = "thud"
 --   resourceName WarpSound = "warp"
 
+instance IsResource World (OctTree (Maybe Color)) where
+  load _ _ fp = do
+    fc <- readFile fp
+    pure
+      $ fuse
+      $ coerce @(OctTree (Maybe (Last Color)))
+      $ foldr (uncurry $ flip insert) mempty $ do
+          l <- filter ((/= "#") . take 1) $ lines fc
+          let (x : y : z : c : []) = words l
+          let col = case c of
+                      "663931" -> V4 64 32 0 255
+                      "d9a066" -> V4 128 128 0 255
+                      _        -> V4 255 0 255 255
+          pure $ (Just $ Last $ col, fmap read $ V3 x y z)
+  resourceFolder = "levels"
+  resourceExt    = "txt"
+  resourceName TestWorld = "test"
+
 
 loadResources :: Engine -> IO Resources
 loadResources engine = do
@@ -183,7 +204,7 @@ loadResources engine = do
   -- textures <- loadResource rpath engine
   -- songs    <- loadResource rpath engine
   -- sounds   <- loadResource rpath engine
-  -- worlds   <- loadResource rpath engine
+  worlds   <- loadResource rpath engine
   anims    <- loadResource rpath engine
   glyphs   <- loadResource rpath engine
 
@@ -192,7 +213,7 @@ loadResources engine = do
     -- , r_textures = textures
     -- , r_sounds   = sounds
     -- , r_songs    = songs
-    -- , r_worlds   = worlds
+    , r_worlds   = worlds
     , r_anims    = anims
     , r_glyphs   = glyphs . Char'
     }

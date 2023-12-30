@@ -41,6 +41,7 @@ import           Data.Kind
 import qualified Data.Map as M
 import           Data.Map.Strict (Map)
 import           Data.Maybe
+import           Data.OctTree
 import           Data.Typeable
 import           Data.Word
 import           Debug.Trace (trace, traceShowId, traceM)
@@ -172,10 +173,15 @@ data Engine = Engine
   , e_window :: Window
   }
 
+data World = TestWorld
+  deriving (Eq, Ord, Show, Enum, Bounded)
+
+
 ------------------------------------------------------------------------------
 -- | Things we need to keep track of, like sprites and music and stuff.
 data Resources = Resources
   { r_engine   :: Engine
+  , r_worlds   :: World -> OctTree (Maybe Color)
   -- , r_textures :: GameTexture -> WrappedTexture
   -- , r_sounds   :: Sound -> ALUT.Source
   -- , r_songs    :: Song -> ALUT.Source

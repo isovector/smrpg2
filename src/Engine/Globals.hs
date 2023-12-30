@@ -2,8 +2,9 @@
 module Engine.Globals where
 
 import           Data.IORef
-import           Engine.Types
+import           Data.OctTree
 import           Engine.Resources (loadResources)
+import           Engine.Types
 import           SDL (Texture)
 -- import qualified Sound.ALUT as ALUT
 import           System.IO.Unsafe
@@ -19,15 +20,15 @@ global_resources = unsafePerformIO $ loadResources =<< readIORef veryUnsafeEngin
 -- global_textures :: GameTexture -> WrappedTexture
 -- global_sounds :: Sound -> ALUT.Source
 -- global_songs :: Song -> ALUT.Source
--- global_worlds :: WorldName -> World
+global_worlds :: World-> OctTree (Maybe Color)
 global_anims :: Anim -> [WrappedTexture]
 global_glyphs :: Char -> Texture
 
 Resources
   { -- r_textures = global_textures
   -- , r_sounds   = global_sounds
-  -- , r_worlds   = global_worlds
     r_anims    = global_anims
+  , r_worlds   = global_worlds
   , r_glyphs   = global_glyphs
   -- , r_songs    = global_songs
   } = global_resources

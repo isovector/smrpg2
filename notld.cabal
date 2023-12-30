@@ -31,7 +31,9 @@ library
       Battle.Scripts.Jump
       Battle.TimedHits
       Battle.Types
-      Data.OctTree.Geometry
+      Data.OctTree
+      Data.OctTree.Naive
+      Data.OctTree.Semilattice
       Engine.Controls
       Engine.Drawing
       Engine.FRP

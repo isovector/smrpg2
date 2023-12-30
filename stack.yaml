@@ -6,5 +6,6 @@ packages:
 extra-deps:
 - Yampa-0.14.6
 - ldtk-types-1.2.3
+- sdl2-2.5.5.0
 
 

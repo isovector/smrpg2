@@ -1,8 +1,13 @@
 {-# LANGUAGE CPP #-}
 
-module Engine.Drawing where
+module Engine.Drawing
+  ( module Engine.Drawing
+  , Region (..)
+  ) where
 
 import           Data.Foldable (for_)
+import           Data.OctTree (Oct(..), Region(..), corners)
+import qualified Data.Vector.Storable as V
 import           Engine.FRP
 import           Engine.Globals
 import           Engine.Resources
@@ -10,6 +15,7 @@ import           Engine.Types
 import           Engine.Utils (originRectToRect)
 import           Foreign.C
 import           SDL
+import qualified SDL.Raw.Types as Raw
 -- import qualified Sound.ALUT as ALUT
 
 
@@ -135,6 +141,60 @@ drawText sz color text _pos@(V2 x y)
           $ V2 sz sz
       rendererDrawBlendMode renderer $= BlendAlphaBlend
   -- | otherwise = mempty
+
+tileWidth = 32
+tileHeight = 16
+tileUp = 32
+
+toIsoSpace :: V3 Int -> Raw.FPoint
+toIsoSpace (fmap (fromIntegral @_ @CFloat) -> V3 x y z)
+  = Raw.FPoint (500 + (tileWidth * x + tileWidth * y) / 2) (300 + (tileHeight * x - tileHeight * y - tileUp * z) / 2)
+
+drawVoxel :: Region Int -> Color -> Renderable
+drawVoxel (corners -> Oct tl0 tr0 bl0 br0 tl1 tr1 bl1 br1) (V4 r g b a) = do
+  let renderer = e_renderer $ r_engine global_resources
+      col    = Raw.Color r g b a
+      uv       = Raw.FPoint 0 0
+  renderGeometry renderer Nothing
+       (V.fromList [ Vertex (toIsoSpace tl1) col uv -- (Raw.Color 255 0 0 255) uv -- 0
+                   , Vertex (toIsoSpace tr1) col uv -- (Raw.Color 255 255 0 255) uv -- 1
+                   , Vertex (toIsoSpace bl1) col uv -- (Raw.Color 0 255 0 255) uv -- 2
+                   , Vertex (toIsoSpace br1) col uv -- (Raw.Color 0 255 255 255) uv -- 3
+                   , Vertex (toIsoSpace tl0) col uv -- (Raw.Color 0 0 255 255) uv -- 4
+                   , Vertex (toIsoSpace tr0) col uv -- (Raw.Color 255 0 255 255) uv -- 5
+                   , Vertex (toIsoSpace bl0) col uv -- (Raw.Color 255 255 255 255) uv -- 6
+                   , Vertex (toIsoSpace br0) col uv -- (Raw.Color 0 0 0 255) uv -- 7
+                   ])
+       (V.fromList [
+                     0, 2, 3 -- top face
+                   , 0, 1, 3
+                   , 4, 5, 1 -- left face blu yello pink
+                   , 0, 1, 4
+                   , 1, 3, 5 -- right face
+                   , 3, 5, 7
+                   ])
+  rendererDrawColor renderer $= V4 0 0 0 255
+  drawLines renderer $ V.fromList $ fmap (\(Raw.FPoint x y) -> P $ fmap round $ V2 x y)
+    [ toIsoSpace tl1
+    , toIsoSpace tr1
+    , toIsoSpace br1
+    , toIsoSpace bl1
+    , toIsoSpace tl1
+    ]
+  drawLines renderer $ V.fromList $ fmap (\(Raw.FPoint x y) -> P $ fmap round $ V2 x y)
+    [ toIsoSpace tl1
+    , toIsoSpace tr1
+    , toIsoSpace tr0
+    , toIsoSpace tl0
+    , toIsoSpace tl1
+    ]
+  drawLines renderer $ V.fromList $ fmap (\(Raw.FPoint x y) -> P $ fmap round $ V2 x y)
+    [ toIsoSpace tr0
+    , toIsoSpace br0
+    , toIsoSpace br1
+    , toIsoSpace tr1
+    , toIsoSpace tr0
+    ]
 
 withDescender :: Double -> Char -> Double -> Double
 withDescender sz 'j' = (+ coerce sz / 6)

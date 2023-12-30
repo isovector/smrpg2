@@ -11,7 +11,9 @@ import           Data.Foldable
 import           Data.List
 import qualified Data.Map as M
 import           Data.Maybe (fromJust, mapMaybe, listToMaybe)
+import           Data.OctTree
 import           Data.Ord
+import           Engine.Globals
 
 
 horton :: BattleFighter
@@ -99,5 +101,7 @@ testRouter = proc rfi -> do
     ] -< rfi
   returnA -< mconcat
     [ foldMap oo_render cc
+    , foldMap (\(r, c) -> flip drawVoxel c $ fmap round r) $ mapMaybe sequence $ volumize $ global_worlds TestWorld
+    -- , drawVoxel (Region 0 0 0 1 1 1) $ V4 255 255 0 255
     ]
 
