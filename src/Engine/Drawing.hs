@@ -144,12 +144,12 @@ drawText sz color text _pos@(V2 x y)
 
 tileWidth, tileHeight, tileUp :: Num a => a
 tileWidth = 32
-tileHeight = 16
+tileHeight = 18
 tileUp = 32
 
 toIsoSpace :: V3 Int -> Raw.FPoint
 toIsoSpace (fmap (fromIntegral @_ @CFloat) -> V3 x y z)
-  = Raw.FPoint (500 + (tileWidth * x + tileWidth * y) / 2) (300 + (tileHeight * x - tileHeight * y - tileUp * z) / 2)
+  = Raw.FPoint (500 + (tileWidth * x + tileWidth * y) / 2) (500 + (tileHeight * x - tileHeight * y - tileUp * z) / 2)
 
 drawVoxel :: Region Int -> Color -> Renderable
 drawVoxel (corners -> Oct tl0 tr0 bl0 br0 tl1 tr1 bl1 br1) (V4 r g b a) = do
@@ -174,7 +174,7 @@ drawVoxel (corners -> Oct tl0 tr0 bl0 br0 tl1 tr1 bl1 br1) (V4 r g b a) = do
                    , 1, 3, 5 -- right face
                    , 3, 5, 7
                    ])
-  rendererDrawColor renderer $= V4 0 0 0 255
+  rendererDrawColor renderer $= V4 0 0 0 64
   drawLines renderer $ V.fromList $ fmap (\(Raw.FPoint x y) -> P $ fmap round $ V2 x y)
     [ toIsoSpace tl1
     , toIsoSpace tr1
