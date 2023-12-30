@@ -142,6 +142,7 @@ drawText sz color text _pos@(V2 x y)
       rendererDrawBlendMode renderer $= BlendAlphaBlend
   -- | otherwise = mempty
 
+tileWidth, tileHeight, tileUp :: Num a => a
 tileWidth = 32
 tileHeight = 16
 tileUp = 32

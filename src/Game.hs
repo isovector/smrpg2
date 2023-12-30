@@ -101,7 +101,10 @@ testRouter = proc rfi -> do
     ] -< rfi
   returnA -< mconcat
     [ foldMap oo_render cc
-    , foldMap (\(r, c) -> flip drawVoxel c $ fmap round r) $ mapMaybe sequence $ volumize $ global_worlds TestWorld
-    -- , drawVoxel (Region 0 0 0 1 1 1) $ V4 255 255 0 255
+    , foldMap (\(r, c) -> flip drawVoxel c $ fmap round r)
+        $ sortOn ((\(Region x y _ _ _ _) -> (x - y)) . fst)
+        $ mapMaybe sequence
+        $ volumize
+        $ global_worlds TestWorld
     ]
 

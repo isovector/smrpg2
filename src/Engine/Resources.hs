@@ -6,13 +6,14 @@
 
 module Engine.Resources where
 
-import Data.Semigroup
 import           Control.Monad ((<=<))
 import qualified Data.Map as M
 import           Data.OctTree
+import           Data.Semigroup
 import           Data.Traversable (for)
 import           Engine.Types
 import           Engine.Utils (setGroundOrigin)
+import           Numeric.Lens (hex)
 import           SDL (Texture, textureWidth, textureHeight)
 import           SDL.JuicyPixels (loadJuicyTexture)
 import           SDL.Video (queryTexture)
@@ -186,11 +187,12 @@ instance IsResource World (OctTree (Maybe Color)) where
       $ coerce @(OctTree (Maybe (Last Color)))
       $ foldr (uncurry $ flip insert) mempty $ do
           l <- filter ((/= "#") . take 1) $ lines fc
-          let (x : y : z : c : []) = words l
-          let col = case c of
-                      "663931" -> V4 64 32 0 255
-                      "d9a066" -> V4 128 128 0 255
-                      _        -> V4 255 0 255 255
+          let (x : y : z : (r1 : r2 : g1 : g2 : b1 : b2 : []) : []) = words l
+              rs = r1 : r2 : []
+              gs = g1 : g2 : []
+              bs = b1 : b2 : []
+          let Just (V3 r g b) = traverse (preview hex) $ V3 rs gs bs
+              col = V4 r g b 255
           pure $ (Just $ Last $ col, fmap read $ V3 x y z)
   resourceFolder = "levels"
   resourceExt    = "txt"
