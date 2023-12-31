@@ -35,6 +35,7 @@ dependencies:
 - filepath
 - vector
 - linear
+- nspace
 
 default-extensions:
 - Arrows

@@ -199,6 +199,10 @@ instance IsResource World (OctTree (Maybe Color)) where
   resourceName TestWorld = "test"
 
 
+insert :: V3 Int -> a -> OctTree a -> OctTree a
+insert (fmap fromIntegral -> pos) = fill (Cube pos 1)
+
+
 loadResources :: Engine -> IO Resources
 loadResources engine = do
   rpath <- resourceRootPath

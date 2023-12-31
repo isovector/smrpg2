@@ -63,10 +63,10 @@ game = testRouter
 voxels :: Renderable
 voxels
   = foldMap (\(r, c) -> flip drawVoxel c $ fmap round r)
-  $ sortOn ((\(Region x y z w _ d) -> ((x - w) - y + z + d)) . fst)
-  $ ((Region (-16) (-16) 0 32 32 1, V4 32 16 0 255) :)
+  $ sortOn ((\(Cube (V3 x y z) (V3 w _ d)) -> ((x - w) - y + z + d)) . fst)
+  $ ((Cube (V3 (-16) (-16) 0) (V3 32 32 1), V4 32 16 0 255) :)
   $ mapMaybe sequence
-  $ volumize
+  $ toCubes
   $ global_worlds TestWorld
 
 testRouter :: SF RawFrameInfo Renderable
@@ -109,7 +109,7 @@ testRouter = proc rfi -> do
     , (Menu, (Nothing , menuObject $ HeroKey Hero1))
     ] -< rfi
   returnA -< mconcat
-    [ foldMap oo_render cc
-    , voxels
+    [ voxels
+    , foldMap oo_render cc
     ]
 

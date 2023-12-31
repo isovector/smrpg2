@@ -31,9 +31,6 @@ library
       Battle.Scripts.Jump
       Battle.TimedHits
       Battle.Types
-      Data.OctTree
-      Data.OctTree.Naive
-      Data.OctTree.Semilattice
       Engine.Controls
       Engine.Drawing
       Engine.FRP
@@ -119,6 +116,7 @@ library
     , lens
     , linear
     , mtl
+    , nspace
     , sdl2
     , text
     , time
@@ -200,6 +198,7 @@ executable notld-exe
     , linear
     , mtl
     , notld
+    , nspace
     , sdl2
     , text
     , time

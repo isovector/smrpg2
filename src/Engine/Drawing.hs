@@ -1,12 +1,14 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP             #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module Engine.Drawing
   ( module Engine.Drawing
-  , Region (..)
+  , Cube (..)
   ) where
 
 import           Data.Foldable (for_)
-import           Data.OctTree (Oct(..), Region(..), corners)
+import           Data.OctTree (Cube(..), cubeCorners)
+import           Data.OctTree.Internal (pattern Oct8)
 import qualified Data.Vector.Storable as V
 import           Engine.FRP
 import           Engine.Globals
@@ -151,8 +153,8 @@ toIsoSpace :: V3 Int -> Raw.FPoint
 toIsoSpace (fmap (fromIntegral @_ @CFloat) -> V3 x y z)
   = Raw.FPoint (500 + (tileWidth * x + tileWidth * y) / 2) (500 + (tileHeight * x - tileHeight * y - tileUp * z) / 2)
 
-drawVoxel :: Region Int -> Color -> Renderable
-drawVoxel (corners -> Oct tl0 tr0 bl0 br0 tl1 tr1 bl1 br1) (V4 r g b a) = do
+drawVoxel :: Cube Int -> Color -> Renderable
+drawVoxel (cubeCorners -> Oct8 tl0 tr0 bl0 br0 tl1 tr1 bl1 br1) (V4 r g b a) = do
   let renderer = e_renderer $ r_engine global_resources
       col    = Raw.Color r g b a
       uv       = Raw.FPoint 0 0

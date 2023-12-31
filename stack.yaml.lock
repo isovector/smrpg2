@@ -25,6 +25,20 @@ packages:
       size: 6641
   original:
     hackage: sdl2-2.5.5.0
+- completed:
+    hackage: nspace-0.1.0.0@sha256:899451501fd7859fb6ea1202d84ed68fd0c438df2281b3a0e910e96e902ed153,2764
+    pantry-tree:
+      sha256: 20bb19cfa240241cd5dc83d0d62878e3eaab75d0f760eca984d267b9f2a2c2c9
+      size: 626
+  original:
+    hackage: nspace-0.1.0.0
+- completed:
+    hackage: monoidal-containers-0.6.4.0@sha256:ad2592b55c748a24ef6c51a8b064ce7dc9864ae20eff607e2e62a33a0789174c,2331
+    pantry-tree:
+      sha256: f989d07a9f615af2afe15bb6007b274731acdbe9cb2921800ce745728e045323
+      size: 569
+  original:
+    hackage: monoidal-containers-0.6.4.0
 snapshots:
 - completed:
     sha256: 63539429076b7ebbab6daa7656cfb079393bf644971156dc349d7c0453694ac2
