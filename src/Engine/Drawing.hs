@@ -6,6 +6,7 @@ module Engine.Drawing
   , Cube (..)
   ) where
 
+-- import           Control.Monad
 import           Data.Foldable (for_)
 import           Data.OctTree (Cube(..), cubeCorners)
 import           Data.OctTree.Internal (pattern Oct8)
@@ -149,60 +150,81 @@ tileWidth = 32
 tileHeight = 18
 tileUp = 32
 
-toIsoSpace :: V3 Rational -> Raw.FPoint
-toIsoSpace (fmap (fromRational @CFloat) -> V3 x y z)
-  = Raw.FPoint (500 + (tileWidth * x + tileWidth * y) / 2) (500 + (tileHeight * x - tileHeight * y - tileUp * z) / 2)
+toIsoSpace :: V3 Rational -> V2 Double
+toIsoSpace (fmap fromRational -> V3 x y z)
+  = V2 (500 + (tileWidth * x + tileWidth * y) / 2) (500 + (tileHeight * x - tileHeight * y - tileUp * z) / 2)
+
+toIsoSpace' :: V3 Rational -> Raw.FPoint
+toIsoSpace' (toIsoSpace -> V2 x y)
+  = Raw.FPoint (fromRational $ toRational x) (fromRational $ toRational  y)
 
 drawVoxel :: Cube Rational -> Color -> Renderable
 drawVoxel (cubeCorners -> Oct8 tl0 tr0 bl0 br0 tl1 tr1 bl1 br1) (V4 r g b a) = do
   let renderer = e_renderer $ r_engine global_resources
-      col    = Raw.Color r g b a
+      col :: Double -> Raw.Color
+      col x   = Raw.Color (round $ fromIntegral r * x)
+                          (round $ fromIntegral g * x)
+                          (round $ fromIntegral b * x) a
+      tcol    = col 1
+      lcol    = col 0.9
+      rcol    = col 0.8
       uv       = Raw.FPoint 0 0
+      vertices c = V.fromList
+                   [ Vertex (toIsoSpace' tl1) c uv
+                   , Vertex (toIsoSpace' tr1) c uv
+                   , Vertex (toIsoSpace' bl1) c uv
+                   , Vertex (toIsoSpace' br1) c uv
+                   , Vertex (toIsoSpace' tl0) c uv
+                   , Vertex (toIsoSpace' tr0) c uv
+                   , Vertex (toIsoSpace' bl0) c uv
+                   , Vertex (toIsoSpace' br0) c uv
+                   ]
   renderGeometry renderer Nothing
-       (V.fromList [ Vertex (toIsoSpace tl1) col uv -- (Raw.Color 255 0 0 255) uv -- 0
-                   , Vertex (toIsoSpace tr1) col uv -- (Raw.Color 255 255 0 255) uv -- 1
-                   , Vertex (toIsoSpace bl1) col uv -- (Raw.Color 0 255 0 255) uv -- 2
-                   , Vertex (toIsoSpace br1) col uv -- (Raw.Color 0 255 255 255) uv -- 3
-                   , Vertex (toIsoSpace tl0) col uv -- (Raw.Color 0 0 255 255) uv -- 4
-                   , Vertex (toIsoSpace tr0) col uv -- (Raw.Color 255 0 255 255) uv -- 5
-                   , Vertex (toIsoSpace bl0) col uv -- (Raw.Color 255 255 255 255) uv -- 6
-                   , Vertex (toIsoSpace br0) col uv -- (Raw.Color 0 0 0 255) uv -- 7
-                   ])
+       (vertices tcol)
        (V.fromList [
                      0, 2, 3 -- top face
                    , 0, 1, 3
-                   , 4, 5, 1 -- left face blu yello pink
+                   ])
+  renderGeometry renderer Nothing
+       (vertices lcol)
+       (V.fromList [
+                     4, 5, 1 -- left face
                    , 0, 1, 4
-                   , 1, 3, 5 -- right face
+                   ])
+  renderGeometry renderer Nothing
+       (vertices rcol)
+       (V.fromList [
+                     1, 3, 5 -- right face
                    , 3, 5, 7
                    ])
   rendererDrawColor renderer $= V4 0 0 0 64
-  drawLines renderer $ V.fromList $ fmap (\(Raw.FPoint x y) -> P $ fmap round $ V2 x y)
-    [ toIsoSpace tl1
-    , toIsoSpace tr1
-    , toIsoSpace br1
-    , toIsoSpace bl1
-    , toIsoSpace tl1
-    ]
-  drawLines renderer $ V.fromList $ fmap (\(Raw.FPoint x y) -> P $ fmap round $ V2 x y)
-    [ toIsoSpace tl1
-    , toIsoSpace tr1
-    , toIsoSpace tr0
-    , toIsoSpace tl0
-    , toIsoSpace tl1
-    ]
-  drawLines renderer $ V.fromList $ fmap (\(Raw.FPoint x y) -> P $ fmap round $ V2 x y)
-    [ toIsoSpace tr0
-    , toIsoSpace br0
-    , toIsoSpace br1
-    , toIsoSpace tr1
-    , toIsoSpace tr0
-    ]
+  -- when (a == 0) $ do
+  do
+    drawLines renderer $ V.fromList $ fmap (P. fmap round)
+      [ toIsoSpace tl1
+      , toIsoSpace tr1
+      , toIsoSpace br1
+      , toIsoSpace bl1
+      , toIsoSpace tl1
+      ]
+    drawLines renderer $ V.fromList $ fmap (P. fmap round)
+      [ toIsoSpace tl1
+      , toIsoSpace tr1
+      , toIsoSpace tr0
+      , toIsoSpace tl0
+      , toIsoSpace tl1
+      ]
+    drawLines renderer $ V.fromList $ fmap (P. fmap round)
+      [ toIsoSpace tr0
+      , toIsoSpace br0
+      , toIsoSpace br1
+      , toIsoSpace tr1
+      , toIsoSpace tr0
+      ]
 
 drawDebugVoxel :: Cube Rational -> Renderable
 drawDebugVoxel (cubeCorners -> Oct8 tl0 tr0 bl0 br0 tl1 tr1 bl1 br1) = do
   let renderer = e_renderer $ r_engine global_resources
-
   let ps = [ (toIsoSpace tl1, V4 255 0 0 255)
            , (toIsoSpace tr1, V4 255 255 0 255)
            , (toIsoSpace bl1, V4 0 255 0 255)
@@ -212,9 +234,15 @@ drawDebugVoxel (cubeCorners -> Oct8 tl0 tr0 bl0 br0 tl1 tr1 bl1 br1) = do
            , (toIsoSpace bl0, V4 255 255 255 255)
            , (toIsoSpace br0, V4 0 0 0 255)
            ]
-  for_ ps $ \(Raw.FPoint x y, col) -> do
+  for_ ps $ \(pos, col) -> do
     rendererDrawColor renderer $= col
-    drawPoint renderer $ P $ fmap round $ V2 x y
+    drawPoint renderer $ P $ fmap round pos
+
+draw3dPoint :: V3 Rational -> Color -> Renderable
+draw3dPoint p col = do
+  let renderer = e_renderer $ r_engine global_resources
+  rendererDrawColor renderer $= col
+  drawPoint renderer $ P $ fmap round $ toIsoSpace p
 
 withDescender :: Double -> Char -> Double -> Double
 withDescender sz 'j' = (+ coerce sz / 6)

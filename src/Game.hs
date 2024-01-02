@@ -4,22 +4,23 @@
 
 module Game where
 
-import Data.Ratio
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe (mapMaybe, isJust)
 import           Data.OctTree
+import           Data.OctTree.Internal (pattern Oct8)
+import           Data.Ratio
 import           Data.Semigroup (Any(..))
 import           Engine.Drawing
 import           Engine.Globals
 import           Engine.Types
 import           Linear.Metric (normalize)
-import           Data.OctTree.Internal (pattern Oct8)
+import           Linear.V3 (_z)
 
 type Key a = (a, a)
 
 sortKey :: Num a => Cube a -> Key a
-sortKey (cubeCorners -> Oct8 _ (V3 x y z) _ _ _ _  _ _) = (x - y, z)
+sortKey (cubeCorners -> Oct8 (V3 x y z) _ _  _  _ _ _ _ ) = (x - y, z)
 
 
 geometry :: Map (Key Rational) Renderable
@@ -27,7 +28,7 @@ geometry
   = M.fromListWith (<>)
   $ fmap (second $ (\(r, c) -> flip drawVoxel c r))
   $ fmap ((sortKey . fst) &&& id)
-  -- $ ((Cube (V3 (-16) (-16) 0) (V3 32 32 1), V4 32 16 0 255) :)
+  -- $ ((Cube (V3 (-16) (-16) 0) (V3 32 32 1), V4 32 16 0 64) :)
   $ mapMaybe sequence
   $ toCubes
   $ global_worlds TestWorld
@@ -50,7 +51,7 @@ arrows (fi_controls -> c) = normalize $ sum
   ]
 
 player :: SF RawFrameInfo (Cube Rational)
-player = let sz = V3 (9 % 10) (9 % 10) 2 in loopPre (Cube @Rational (V3 0 0 1) sz) $ proc (rfi, Cube pos _) -> do
+player = let sz = V3 (9 % 10) (9 % 10) (16 % 10) in loopPre (Cube @Rational (V3 0 0 1) sz) $ proc (rfi, Cube pos _) -> do
   let V2 x y = arrows rfi
       wanted_pos = pos + (fmap toRational $ (V3 x y 0) ^* (5 * fi_deltaTime rfi))
       wanted_cube = Cube wanted_pos sz
@@ -61,9 +62,14 @@ player = let sz = V3 (9 % 10) (9 % 10) 2 in loopPre (Cube @Rational (V3 0 0 1) s
 
 game :: SF RawFrameInfo Renderable
 game = proc rfi -> do
-  p <- player -< rfi
+  c@(Cube pos sz) <- player -< rfi
+  let center = pos + ((sz / 2) & _z .~ 0)
+  mario <- mkAnim -< (DrawSpriteDetails Mario_Battle_Idle 0 $ pure False, toIsoSpace center + V2 0 5)
 
   returnA -< mconcat
-    [ renderScene $ M.insert (sortKey p) (drawVoxel p $ V4 0 255 0 255) geometry
+    [ renderScene $ M.insertWith (<>) (sortKey c) (mconcat
+        [ mario
+        , drawVoxel c $ V4 0 255 0 64
+        ]) geometry
     ]
 

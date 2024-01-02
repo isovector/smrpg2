@@ -92,7 +92,7 @@ instance IsResource Anim [WrappedTexture] where
     for [0 .. frameCounts an - 1] $ \i -> do
       let fp = rpath </> "sprites/" </> animName an <> "_" <> show i <.> "png"
       wt <- wrapTexture =<< loadJuicyTexture (e_renderer e) fp
-      pure $ setGroundOrigin $ scaleWrapped 1.5 wt
+      pure $ setGroundOrigin $ scaleWrapped 1.2 wt
 
 
 animName :: Anim -> FilePath
