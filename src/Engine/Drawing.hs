@@ -6,7 +6,7 @@ module Engine.Drawing
   , Cube (..)
   ) where
 
--- import           Control.Monad
+import           Control.Monad
 import           Data.Foldable (for_)
 import           Data.OctTree (Cube(..), cubeCorners)
 import           Data.OctTree.Internal (pattern Oct8)
@@ -198,8 +198,7 @@ drawVoxel (cubeCorners -> Oct8 tl0 tr0 bl0 br0 tl1 tr1 bl1 br1) (V4 r g b a) = d
                    , 3, 5, 7
                    ])
   rendererDrawColor renderer $= V4 0 0 0 64
-  -- when (a == 0) $ do
-  do
+  when (a == 0) $ do
     drawLines renderer $ V.fromList $ fmap (P. fmap round)
       [ toIsoSpace tl1
       , toIsoSpace tr1

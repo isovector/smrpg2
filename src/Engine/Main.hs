@@ -35,9 +35,12 @@ main :: IO ()
 main = do -- ALUT.withProgNameAndArgs ALUT.runALUT $ \_ _ -> do
   initializeAll
 
+  _ <- setHintWithPriority NormalPriority HintRenderScaleQuality ScaleBest
   window <- createWindow "Where's My Chicken, Man?" $ defaultWindow
     { windowInitialSize = fmap (round @Double) screenSize
     , windowGraphicsContext = OpenGLContext defaultOpenGL
+        { glMultisampleSamples = 4
+        }
     }
   ctx <- glCreateContext window
   glMakeCurrent window ctx

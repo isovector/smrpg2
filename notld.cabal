@@ -25,6 +25,7 @@ source-repository head
 
 library
   exposed-modules:
+      Battle
       Battle.Common
       Battle.Damage
       Battle.Menu
