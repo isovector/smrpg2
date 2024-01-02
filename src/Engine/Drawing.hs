@@ -159,7 +159,7 @@ toIsoSpace' (toIsoSpace -> V2 x y)
   = Raw.FPoint (fromRational $ toRational x) (fromRational $ toRational  y)
 
 drawVoxel :: Cube Rational -> Color -> Renderable
-drawVoxel (cubeCorners -> Oct8 tl0 tr0 bl0 br0 tl1 tr1 bl1 br1) (V4 r g b a) = do
+drawVoxel c@(cubeCorners -> Oct8 tl0 tr0 bl0 br0 tl1 tr1 bl1 br1) (V4 r g b a) = do
   let renderer = e_renderer $ r_engine global_resources
       col :: Double -> Raw.Color
       col x   = Raw.Color (round $ fromIntegral r * x)
@@ -197,6 +197,7 @@ drawVoxel (cubeCorners -> Oct8 tl0 tr0 bl0 br0 tl1 tr1 bl1 br1) (V4 r g b a) = d
                      1, 3, 5 -- right face
                    , 3, 5, 7
                    ])
+  draw3dPoint (getRelevantCorner c) $ V4 255 0 0 255
   rendererDrawColor renderer $= V4 0 0 0 64
   when (a == 0) $ do
     drawLines renderer $ V.fromList $ fmap (P. fmap round)
@@ -220,6 +221,9 @@ drawVoxel (cubeCorners -> Oct8 tl0 tr0 bl0 br0 tl1 tr1 bl1 br1) (V4 r g b a) = d
       , toIsoSpace tr1
       , toIsoSpace tr0
       ]
+
+getRelevantCorner :: Num a => Cube a -> V3 a
+getRelevantCorner (cubeCorners -> Oct8 _ a _ _ _ _ _ _ ) = a
 
 drawDebugVoxel :: Cube Rational -> Renderable
 drawDebugVoxel (cubeCorners -> Oct8 tl0 tr0 bl0 br0 tl1 tr1 bl1 br1) = do

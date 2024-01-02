@@ -20,7 +20,7 @@ import           Linear.V3 (_z)
 type Key a = (a, a)
 
 sortKey :: Num a => Cube a -> Key a
-sortKey (cubeCorners -> Oct8 (V3 x y z) _ _  _  _ _ _ _ ) = (x - y, z)
+sortKey (getRelevantCorner -> (V3 x y z)) = (x - y, z)
 
 
 geometry :: Map (Key Rational) Renderable
@@ -51,7 +51,7 @@ arrows (fi_controls -> c) = normalize $ sum
   ]
 
 player :: SF RawFrameInfo (Cube Rational)
-player = let sz = V3 (9 % 10) (9 % 10) (16 % 10) in loopPre (Cube @Rational (V3 0 0 1) sz) $ proc (rfi, Cube pos _) -> do
+player = let sz = V3 (9 % 10) (9 % 10) (16 % 10) in loopPre (Cube @Rational (V3 0 0 (101 % 100)) sz) $ proc (rfi, Cube pos _) -> do
   let V2 x y = arrows rfi
       wanted_pos = pos + (fmap toRational $ (V3 x y 0) ^* (5 * fi_deltaTime rfi))
       wanted_cube = Cube wanted_pos sz
