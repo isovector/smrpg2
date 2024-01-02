@@ -9,7 +9,9 @@ import Control.Monad.Cont
 import Data.Bool (bool)
 import Data.Foldable (traverse_)
 import Data.Monoid
-import FRP.Yampa hiding ((*^), fromEvent)
+import FRP.Yampa hiding (fromEvent, (*^))
+import qualified FRP.Yampa
+import qualified Linear as L
 
 newtype Swont r i o a = Swont
   { runSwont' :: ContT (o, Event r) (SF i) a
@@ -160,4 +162,22 @@ fromEvent _ (Event a') = a'
 whenE :: Bool -> Event a -> Event a
 whenE False _ = noEvent
 whenE True ev = ev
+
+instance (Eq a, Floating a) => VectorSpace (L.V2 a) a where
+  zeroVector = L.zero
+  (*^) = (L.*^)
+  (^/) = (L.^/)
+  negateVector = L.negated
+  (^+^) = (L.^+^)
+  (^-^) = (L.^-^)
+  dot = L.dot
+
+instance (Eq a, Floating a) => VectorSpace (L.V3 a) a where
+  zeroVector = L.zero
+  (*^) = (L.*^)
+  (^/) = (L.^/)
+  negateVector = L.negated
+  (^+^) = (L.^+^)
+  (^-^) = (L.^-^)
+  dot = L.dot
 

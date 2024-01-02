@@ -149,11 +149,11 @@ tileWidth = 32
 tileHeight = 18
 tileUp = 32
 
-toIsoSpace :: V3 Int -> Raw.FPoint
-toIsoSpace (fmap (fromIntegral @_ @CFloat) -> V3 x y z)
+toIsoSpace :: V3 Rational -> Raw.FPoint
+toIsoSpace (fmap (fromRational @CFloat) -> V3 x y z)
   = Raw.FPoint (500 + (tileWidth * x + tileWidth * y) / 2) (500 + (tileHeight * x - tileHeight * y - tileUp * z) / 2)
 
-drawVoxel :: Cube Int -> Color -> Renderable
+drawVoxel :: Cube Rational -> Color -> Renderable
 drawVoxel (cubeCorners -> Oct8 tl0 tr0 bl0 br0 tl1 tr1 bl1 br1) (V4 r g b a) = do
   let renderer = e_renderer $ r_engine global_resources
       col    = Raw.Color r g b a
@@ -198,6 +198,23 @@ drawVoxel (cubeCorners -> Oct8 tl0 tr0 bl0 br0 tl1 tr1 bl1 br1) (V4 r g b a) = d
     , toIsoSpace tr1
     , toIsoSpace tr0
     ]
+
+drawDebugVoxel :: Cube Rational -> Renderable
+drawDebugVoxel (cubeCorners -> Oct8 tl0 tr0 bl0 br0 tl1 tr1 bl1 br1) = do
+  let renderer = e_renderer $ r_engine global_resources
+
+  let ps = [ (toIsoSpace tl1, V4 255 0 0 255)
+           , (toIsoSpace tr1, V4 255 255 0 255)
+           , (toIsoSpace bl1, V4 0 255 0 255)
+           , (toIsoSpace br1, V4 0 255 255 255)
+           , (toIsoSpace tl0, V4 0 0 255 255)
+           , (toIsoSpace tr0, V4 255 0 255 255)
+           , (toIsoSpace bl0, V4 255 255 255 255)
+           , (toIsoSpace br0, V4 0 0 0 255)
+           ]
+  for_ ps $ \(Raw.FPoint x y, col) -> do
+    rendererDrawColor renderer $= col
+    drawPoint renderer $ P $ fmap round $ V2 x y
 
 withDescender :: Double -> Char -> Double -> Double
 withDescender sz 'j' = (+ coerce sz / 6)

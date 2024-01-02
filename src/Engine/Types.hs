@@ -45,7 +45,7 @@ import           Data.OctTree
 import           Data.Typeable
 import           Data.Word
 import           Debug.Trace (trace, traceShowId, traceM)
-import           Engine.FRP hiding (left, right, loop)
+import           Engine.FRP hiding (left, right, loop, normalize)
 import           Foreign.C (CInt)
 import           GHC.Generics
 import           SDL hiding (trace, Event, Display)
@@ -201,6 +201,7 @@ type Renderable = IO ()
 -- | Things that change every frame.
 data FrameInfo' a = FrameInfo
   { fi_controls :: Controls
+  , fi_deltaTime :: Time
   , fi_ext :: a
   }
   deriving stock (Show, Generic)

@@ -61,7 +61,7 @@ main = do -- ALUT.withProgNameAndArgs ALUT.runALUT $ \_ _ -> do
   tRef <- newIORef seconds
 
   reactimate
-    (pure $ FrameInfo (Controls False False False False 0 False False False False) ())
+    (pure $ FrameInfo (Controls False False False False 0 False False False False) 0.016 ())
     (input window tRef)
     (output engine)
     game
@@ -86,7 +86,7 @@ input win tRef _ = do
 
   keys <- getKeyboardState
 
-  pure (dt, Just $ FrameInfo (parseControls keys) ())
+  pure (dt, Just $ FrameInfo (parseControls keys) dt ())
 
 
 pattern Keypress :: Scancode -> EventPayload
